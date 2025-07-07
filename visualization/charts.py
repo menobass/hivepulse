@@ -660,7 +660,7 @@ class ChartGenerator:
                 ax.grid(True, alpha=0.3)
             
             # 1. Active Users Trend (top-left)
-            historical_data = data['community'].get('historical_data', [])
+            historical_data = data['community_stats'].get('historical_data', [])
             dates = []
             if historical_data:
                 dates = [datetime.strptime(item['date'], '%Y-%m-%d') for item in historical_data]

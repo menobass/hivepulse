@@ -75,40 +75,15 @@ class HiveEcuadorPulse:
             return False
 
     def collect_daily_data(self, date: Optional[str] = None) -> Dict:
-        """Collect all daily analytics data"""
+        """Collect all daily analytics data with automatic member sync"""
         if date is None:
             date = datetime.now().strftime('%Y-%m-%d')
         
-        self.logger.info(f"Collecting daily data for {date}")
+        self.logger.info(f"Collecting daily data with member sync for {date}")
         
         try:
-            # Collect community activity data
-            community_data = self.analytics_collector.get_community_activity(date)
-            
-            # Collect individual user activities
-            user_activities = self.analytics_collector.get_user_activities(date)
-            
-            # Collect business transaction data
-            business_data = self.analytics_collector.track_business_activity(date)
-            
-            # Calculate engagement metrics
-            engagement_metrics = self.analytics_collector.calculate_engagement_metrics({
-                'community': community_data,
-                'users': user_activities,
-                'business': business_data
-            })
-            
-            # Identify top performers
-            top_performers = self.analytics_collector.identify_top_performers(user_activities)
-            
-            return {
-                'date': date,
-                'community': community_data,
-                'users': user_activities,
-                'business': business_data,
-                'engagement': engagement_metrics,
-                'top_performers': top_performers
-            }
+            # Use the new collection system with automatic member discovery
+            return self.analytics_collector.collect_daily_data_with_member_sync(date)
             
         except Exception as e:
             self.logger.error(f"Error collecting daily data: {str(e)}")
@@ -126,22 +101,23 @@ class HiveEcuadorPulse:
             chart_files.append(header_image)
             
             # Generate community health charts
-            activity_chart = self.chart_generator.create_activity_trend_chart(data['community'])
+            activity_chart = self.chart_generator.create_activity_trend_chart(data['community_stats'])
             chart_files.append(activity_chart)
             
-            posts_chart = self.chart_generator.create_posts_volume_chart(data['community'])
+            posts_chart = self.chart_generator.create_posts_volume_chart(data['community_stats'])
             chart_files.append(posts_chart)
             
-            comments_chart = self.chart_generator.create_comments_chart(data['community'])
+            comments_chart = self.chart_generator.create_comments_chart(data['community_stats'])
             chart_files.append(comments_chart)
             
-            upvotes_chart = self.chart_generator.create_upvotes_chart(data['community'])
+            upvotes_chart = self.chart_generator.create_upvotes_chart(data['community_stats'])
             chart_files.append(upvotes_chart)
             
             # Generate financial charts if business data exists
-            if data['business']['transactions']:
-                hbd_chart = self.chart_generator.create_hbd_flow_chart(data['business'])
-                chart_files.append(hbd_chart)
+            # TODO: Implement business data collection
+            # if data.get('business', {}).get('transactions'):
+            #     hbd_chart = self.chart_generator.create_hbd_flow_chart(data['business'])
+            #     chart_files.append(hbd_chart)
             
             self.logger.info(f"Generated {len(chart_files)} charts successfully")
             return chart_files
@@ -266,6 +242,12 @@ def main():
                        help='Add a user to tracking')
     parser.add_argument('--list-users', action='store_true',
                        help='List all tracked users')
+    parser.add_argument('--sync-members', action='store_true',
+                       help='Sync community members from Hive followers')
+    parser.add_argument('--member-stats', action='store_true',
+                       help='Show community membership statistics')
+    parser.add_argument('--force-resync', action='store_true',
+                       help='Force complete resync of all members (use carefully!)')
     
     args = parser.parse_args()
     
@@ -281,6 +263,46 @@ def main():
             else:
                 print("Database initialization failed!")
                 sys.exit(1)
+            return
+            
+        if args.sync_members:
+            print("Syncing community members from Hive followers...")
+            from management.community_manager import CommunityMemberManager
+            member_manager = CommunityMemberManager(bot.hive_api, bot.db_manager)
+            sync_results = member_manager.sync_community_members()
+            print(f"✅ Sync completed:")
+            print(f"   Total followers: {sync_results['total_followers']}")
+            print(f"   Total tracked: {sync_results['total_tracked']}")
+            print(f"   New members: {sync_results['new_members']}")
+            print(f"   Left members: {sync_results['left_members']}")
+            print(f"   Rejoined: {sync_results['rejoined_members']}")
+            return
+            
+        if args.member_stats:
+            print("Community membership statistics:")
+            from management.community_manager import CommunityMemberManager
+            member_manager = CommunityMemberManager(bot.hive_api, bot.db_manager)
+            stats = member_manager.get_membership_stats()
+            print(f"   Total members: {stats['total_members']}")
+            print(f"   Active today: {stats['active_today']}")
+            print(f"   Active this week: {stats['active_this_week']}")
+            print(f"   New this week: {stats['new_this_week']}")
+            print(f"   Engagement rate: {stats['engagement_rate']:.1f}%")
+            return
+            
+        if args.force_resync:
+            print("⚠️  FORCE RESYNC: This will clear all current members and re-add from followers!")
+            response = input("Are you sure? Type 'yes' to continue: ")
+            if response.lower() == 'yes':
+                from management.community_manager import CommunityMemberManager
+                member_manager = CommunityMemberManager(bot.hive_api, bot.db_manager)
+                if member_manager.force_resync_all_members():
+                    print("✅ Force resync completed successfully!")
+                else:
+                    print("❌ Force resync failed!")
+                    sys.exit(1)
+            else:
+                print("Force resync cancelled.")
             return
             
         if args.add_user:

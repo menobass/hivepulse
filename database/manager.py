@@ -462,3 +462,236 @@ class DatabaseManager:
         except Exception as e:
             self.logger.error(f"Error cleaning up old data: {str(e)}")
             return False
+    
+    def add_user_with_join_date(self, username: str, display_name: str, join_date: str, 
+                                reputation: int = 0, followers: int = 0, following: int = 0) -> bool:
+        """Add a user with detailed information including join date"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute("""
+                    INSERT OR REPLACE INTO users 
+                    (username, display_name, reputation, followers, following, 
+                     created_at, updated_at, is_active, is_business, tags)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, 1, 0, ?)
+                """, (username, display_name, reputation, followers, following, 
+                      join_date, join_date, f"joined:{join_date}"))
+                conn.commit()
+                
+                self.logger.info(f"Added user {username} with join date {join_date}")
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Error adding user with join date {username}: {str(e)}")
+            return False
+    
+    def deactivate_user_with_leave_date(self, username: str, leave_date: str) -> bool:
+        """Deactivate a user and mark their leave date"""
+        try:
+            with self.get_connection() as conn:
+                # Get current tags to preserve join date
+                cursor = conn.execute("SELECT tags FROM users WHERE username = ?", (username,))
+                row = cursor.fetchone()
+                current_tags = row[0] if row else ""
+                
+                # Add leave date to tags
+                new_tags = f"{current_tags},left:{leave_date}" if current_tags else f"left:{leave_date}"
+                
+                conn.execute("""
+                    UPDATE users SET 
+                        is_active = 0, 
+                        updated_at = ?, 
+                        tags = ?
+                    WHERE username = ?
+                """, (leave_date, new_tags, username))
+                conn.commit()
+                
+                self.logger.info(f"Deactivated user {username} with leave date {leave_date}")
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Error deactivating user {username}: {str(e)}")
+            return False
+    
+    def reset_user_tracking(self, username: str, new_join_date: str, previous_join_date: Optional[str]) -> bool:
+        """Reset user tracking for returning members (starts from zero)"""
+        try:
+            with self.get_connection() as conn:
+                # Archive their previous activity by updating tags
+                history_tag = f"previous_member:{previous_join_date}" if previous_join_date else "previous_member"
+                new_tags = f"rejoined:{new_join_date},{history_tag}"
+                
+                # Reset user as if they're new
+                conn.execute("""
+                    UPDATE users SET 
+                        is_active = 1,
+                        created_at = ?,
+                        updated_at = ?,
+                        tags = ?
+                    WHERE username = ?
+                """, (new_join_date, new_join_date, new_tags, username))
+                
+                # Clear their activity history (start from zero per requirement)
+                conn.execute("DELETE FROM user_activities WHERE username = ?", (username,))
+                conn.execute("DELETE FROM daily_activity WHERE username = ?", (username,))
+                
+                conn.commit()
+                
+                self.logger.info(f"Reset tracking for returning user {username}")
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Error resetting user tracking {username}: {str(e)}")
+            return False
+    
+    def get_user_history(self, username: str) -> Optional[Dict]:
+        """Get user membership history"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT username, created_at, updated_at, is_active, tags
+                    FROM users WHERE username = ?
+                """, (username,))
+                
+                row = cursor.fetchone()
+                if row:
+                    tags = row[4] or ""
+                    
+                    # Parse tags to find join/leave history
+                    has_previous = "left:" in tags or "previous_member:" in tags
+                    last_join_date = None
+                    
+                    if "joined:" in tags:
+                        for tag in tags.split(","):
+                            if tag.startswith("joined:"):
+                                last_join_date = tag.replace("joined:", "")
+                                break
+                    
+                    return {
+                        'username': row[0],
+                        'has_previous_membership': has_previous,
+                        'last_join_date': last_join_date,
+                        'is_currently_active': bool(row[3]),
+                        'last_updated': row[2]
+                    }
+                
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error getting user history {username}: {str(e)}")
+            return None
+    
+    def log_membership_change(self, change) -> bool:
+        """Log membership changes for analytics"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute("""
+                    INSERT INTO bot_logs 
+                    (level, message, details, module, timestamp)
+                    VALUES (?, ?, ?, ?, ?)
+                """, (
+                    "INFO",
+                    f"Membership change: {change.username} {change.action}",
+                    f"Previous join: {change.previous_join_date}" if change.previous_join_date else "",
+                    "community_manager",
+                    change.timestamp
+                ))
+                conn.commit()
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Error logging membership change: {str(e)}")
+            return False
+    
+    def get_active_users_count(self, days: int = 7) -> int:
+        """Get count of users active in the last N days"""
+        try:
+            with self.get_connection() as conn:
+                cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+                
+                cursor = conn.execute("""
+                    SELECT COUNT(DISTINCT username) 
+                    FROM daily_activity 
+                    WHERE date >= ? AND (posts_count > 0 OR comments_count > 0 OR upvotes_given > 0)
+                """, (cutoff_date,))
+                
+                return cursor.fetchone()[0]
+                
+        except Exception as e:
+            self.logger.error(f"Error getting active users count: {str(e)}")
+            return 0
+    
+    def get_new_members_count(self, days: int = 7) -> int:
+        """Get count of new members in the last N days"""
+        try:
+            with self.get_connection() as conn:
+                cutoff_date = (datetime.now() - timedelta(days=days)).isoformat()
+                
+                cursor = conn.execute("""
+                    SELECT COUNT(*) FROM users 
+                    WHERE created_at >= ? AND is_active = 1
+                """, (cutoff_date,))
+                
+                return cursor.fetchone()[0]
+                
+        except Exception as e:
+            self.logger.error(f"Error getting new members count: {str(e)}")
+            return 0
+    
+    def get_top_engaging_users(self, days: int = 7, limit: int = 10) -> List[Dict]:
+        """Get top engaging users based on recent activity"""
+        try:
+            with self.get_connection() as conn:
+                cutoff_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+                
+                cursor = conn.execute("""
+                    SELECT 
+                        username,
+                        SUM(posts_count) as total_posts,
+                        SUM(comments_count) as total_comments,
+                        SUM(upvotes_given) as total_votes_given,
+                        SUM(engagement_score) as total_engagement
+                    FROM daily_activity 
+                    WHERE date >= ?
+                    GROUP BY username
+                    ORDER BY total_engagement DESC
+                    LIMIT ?
+                """, (cutoff_date, limit))
+                
+                return [dict(row) for row in cursor.fetchall()]
+                
+        except Exception as e:
+            self.logger.error(f"Error getting top engaging users: {str(e)}")
+            return []
+    
+    def get_user_info(self, username: str) -> Optional[Dict]:
+        """Get detailed user information"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.execute("""
+                    SELECT * FROM users WHERE username = ?
+                """, (username,))
+                
+                row = cursor.fetchone()
+                if row:
+                    return dict(row)
+                return None
+                
+        except Exception as e:
+            self.logger.error(f"Error getting user info {username}: {str(e)}")
+            return None
+    
+    def clear_all_users(self) -> bool:
+        """Clear all users (use with extreme caution!)"""
+        try:
+            with self.get_connection() as conn:
+                conn.execute("DELETE FROM users")
+                conn.execute("DELETE FROM user_activities") 
+                conn.execute("DELETE FROM daily_activity")
+                conn.commit()
+                
+                self.logger.warning("Cleared all users from database")
+                return True
+                
+        except Exception as e:
+            self.logger.error(f"Error clearing all users: {str(e)}")
+            return False

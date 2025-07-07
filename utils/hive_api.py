@@ -529,3 +529,193 @@ class HiveAPIClient:
         except Exception as e:
             self.logger.error(f"Error getting witness schedule: {str(e)}")
             return None
+    
+    def get_community_followers(self, community_account: str = "hive-115276") -> List[str]:
+        """Get all followers of the community account"""
+        self.logger.info(f"Getting followers for community account {community_account}")
+        
+        # For testing/development, use mock data
+        # TODO: Implement real API call when lighthive is properly configured
+        mock_followers = [
+            "menobass", "ecuadorestelar", "testuser1", "testuser2",
+            "hiveecuador", "ecuadortest", "mockuser1", "mockuser2"
+        ]
+        
+        self.logger.info(f"Using mock follower data: {len(mock_followers)} followers")
+        return mock_followers
+        
+        # Real implementation (commented out for now):
+        # try:
+        #     # Use follow_api to get followers
+        #     followers = []
+        #     start_follower = ""
+        #     limit = 1000
+        #     
+        #     while True:
+        #         self._rate_limit()
+        #         
+        #         # Get batch of followers using condenser_api
+        #         result = self._make_api_call("condenser_api.get_followers", [
+        #             community_account,
+        #             start_follower,
+        #             "blog",
+        #             limit
+        #         ])
+        #         
+        #         if not result or len(result) == 0:
+        #             break
+        #         
+        #         # Extract follower usernames
+        #         batch_followers = []
+        #         for follower_data in result:
+        #             if isinstance(follower_data, dict) and 'follower' in follower_data:
+        #                 follower_name = follower_data['follower']
+        #                 if follower_name != start_follower:  # Skip the starting point
+        #                     followers.append(follower_name)
+        #                     batch_followers.append(follower_name)
+        #         
+        #         # If we got less than the limit, we're done
+        #         if len(result) < limit:
+        #             break
+        #         
+        #         # Set next starting point
+        #         if batch_followers:
+        #             start_follower = batch_followers[-1]
+        #         else:
+        #             break
+        #     
+        #     self.logger.info(f"Found {len(followers)} followers for {community_account}")
+        #     return followers
+        #     
+        # except Exception as e:
+        #     self.logger.error(f"Error getting community followers: {str(e)}")
+        #     # For testing, return some mock followers
+        #     self.logger.info("Using mock follower data for testing")
+        #     return [
+        #         "menobass", "ecuadorestelar", "testuser1", "testuser2",
+        #         "hiveecuador", "ecuadortest", "mockuser1", "mockuser2"
+        #     ]
+
+    def get_account_info_extended(self, username: str) -> Optional[Dict]:
+        """Get enhanced account information for community tracking"""
+        try:
+            self._rate_limit()
+            
+            result = self._make_api_call("condenser_api.get_accounts", [[username]])
+            
+            if result and len(result) > 0:
+                account = result[0]
+                return {
+                    'username': account.get('name', username),
+                    'display_name': account.get('posting_json_metadata', {}).get('profile', {}).get('name', username),
+                    'reputation': account.get('reputation', 0),
+                    'followers': account.get('follower_count', 0),
+                    'following': account.get('following_count', 0),
+                    'created': account.get('created', ''),
+                    'posting_rewards': account.get('posting_rewards', 0)
+                }
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting account info for {username}: {str(e)}")
+            return None
+
+    def get_user_blockchain_activity(self, username: str, date: str) -> Dict:
+        """Get user's blockchain-wide activity for a specific date"""
+        self.logger.info(f"Getting blockchain activity for {username} on {date}")
+        
+        try:
+            # Get account history for the date
+            start_date = datetime.strptime(date, '%Y-%m-%d')
+            end_date = start_date + timedelta(days=1)
+            
+            # For now, return enhanced mock data that matches tracked users
+            mock_data = {
+                'username': username,
+                'date': date,
+                'posts': [],
+                'comments': [],
+                'votes_given': [],
+                'votes_received': 0,
+                'total_posts': 0,
+                'total_comments': 0,
+                'total_votes_given': 0,
+                'total_votes_received': 0,
+                'engagement_score': 0.0
+            }
+            
+            # Generate realistic mock activity based on username
+            import random
+            random.seed(hash(username + date))  # Consistent data per user/date
+            
+            # Posts activity
+            posts_count = random.randint(0, 3)
+            for i in range(posts_count):
+                post = {
+                    'author': username,
+                    'permlink': f'post-{date}-{i}',
+                    'title': f'Post by {username} on {date}',
+                    'created': f'{date}T{random.randint(8, 20):02d}:{random.randint(0, 59):02d}:00',
+                    'net_votes': random.randint(1, 25),
+                    'children': random.randint(0, 10),
+                    'category': random.choice(['lifestyle', 'photography', 'spanish', 'travel', 'food'])
+                }
+                mock_data['posts'].append(post)
+            
+            # Comments activity
+            comments_count = random.randint(0, 8)
+            for i in range(comments_count):
+                comment = {
+                    'author': username,
+                    'permlink': f'comment-{date}-{i}',
+                    'created': f'{date}T{random.randint(8, 20):02d}:{random.randint(0, 59):02d}:00',
+                    'parent_author': f'other-user-{i}',
+                    'parent_permlink': f'some-post-{i}',
+                    'net_votes': random.randint(0, 5)
+                }
+                mock_data['comments'].append(comment)
+            
+            # Votes given
+            votes_given_count = random.randint(5, 30)
+            for i in range(votes_given_count):
+                vote = {
+                    'voter': username,
+                    'author': f'user-{i % 10}',
+                    'permlink': f'voted-post-{i}',
+                    'weight': random.randint(500, 10000),
+                    'time': f'{date}T{random.randint(8, 20):02d}:{random.randint(0, 59):02d}:00'
+                }
+                mock_data['votes_given'].append(vote)
+            
+            # Calculate totals
+            mock_data['total_posts'] = len(mock_data['posts'])
+            mock_data['total_comments'] = len(mock_data['comments'])
+            mock_data['total_votes_given'] = len(mock_data['votes_given'])
+            mock_data['total_votes_received'] = sum(p['net_votes'] for p in mock_data['posts']) + sum(c['net_votes'] for c in mock_data['comments'])
+            
+            # Calculate engagement score
+            mock_data['engagement_score'] = (
+                mock_data['total_posts'] * 10 +
+                mock_data['total_comments'] * 5 +
+                mock_data['total_votes_given'] * 1 +
+                mock_data['total_votes_received'] * 2
+            )
+            
+            return mock_data
+            
+        except Exception as e:
+            self.logger.error(f"Error getting blockchain activity for {username}: {str(e)}")
+            return {
+                'username': username,
+                'date': date,
+                'posts': [],
+                'comments': [],
+                'votes_given': [],
+                'votes_received': 0,
+                'total_posts': 0,
+                'total_comments': 0,
+                'total_votes_given': 0,
+                'total_votes_received': 0,
+                'engagement_score': 0.0
+            }

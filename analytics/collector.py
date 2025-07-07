@@ -1,6 +1,6 @@
 """
 Analytics Collector Module
-Handles data collection from Hive blockchain APIs
+Handles data collection from Hive blockchain APIs with automatic member discovery
 """
 
 import logging
@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from utils.hive_api import HiveAPIClient
 from database.manager import DatabaseManager
+from management.community_manager import CommunityMemberManager
 
 
 @dataclass
@@ -36,146 +37,202 @@ class CommunityStats:
 
 
 class AnalyticsCollector:
-    """Collects and processes analytics data from Hive blockchain"""
+    """Collects and processes analytics data from Hive blockchain with automatic member management"""
     
     def __init__(self, hive_api: HiveAPIClient, db_manager: DatabaseManager):
         self.hive_api = hive_api
         self.db_manager = db_manager
         self.logger = logging.getLogger(__name__)
-        self.community_tag = "hive-115276"  # Hive Ecuador community
-    
-    def get_community_activity(self, date: str) -> Dict:
-        """Get community activity data for a specific date"""
-        self.logger.info(f"Collecting community activity for {date}")
+        
+        # Initialize community member manager
+        self.member_manager = CommunityMemberManager(hive_api, db_manager)
+        
+    def collect_daily_data_with_member_sync(self, date: Optional[str] = None) -> Dict:
+        """Complete data collection process with automatic member sync"""
+        if date is None:
+            date = datetime.now().strftime('%Y-%m-%d')
+        
+        self.logger.info(f"Starting daily data collection with member sync for {date}")
         
         try:
-            # Get posts from the community for the date
-            posts = self.hive_api.get_posts_by_tag(
-                tag=self.community_tag,
-                date=date,
-                limit=100
-            )
+            # Step 1: Sync community members (auto-discovery)
+            sync_results = self.member_manager.sync_community_members()
+            self.logger.info(f"Member sync: {sync_results}")
             
-            # Handle None response
-            if posts is None:
-                posts = []
+            # Step 2: Collect blockchain-wide activity for all members
+            user_activities = self.get_user_activities_blockchain_wide(date)
             
-            # Get comments data
-            comments = self.hive_api.get_comments_by_community(
-                community=self.community_tag,
-                date=date
-            )
+            # Step 3: Calculate community stats based on member activity
+            community_stats = self.calculate_community_stats_from_members(user_activities, date)
             
-            # Handle None response
-            if comments is None:
-                comments = []
+            # Step 4: Get historical data for trends (last 7 days)
+            historical_data = self.db_manager.get_community_trends(7)
+            community_stats['historical_data'] = historical_data
             
-            # Calculate community statistics
-            active_users = len(set([post.get('author', '') for post in posts if post.get('author')] + 
-                                 [comment.get('author', '') for comment in comments if comment.get('author')]))
+            # Step 5: Get membership analytics
+            membership_stats = self.member_manager.get_membership_stats()
             
-            total_posts = len(posts)
-            total_comments = len(comments)
-            total_upvotes = sum(post.get('net_votes', 0) for post in posts if isinstance(post.get('net_votes'), (int, float)))
+            # Step 6: Identify top performers
+            top_performers = self.identify_top_performers(user_activities)
             
-            # Calculate engagement rate
-            engagement_rate = (total_comments / total_posts) if total_posts > 0 else 0.0
-            
-            # Get historical data for trends
-            historical_data = self._get_historical_community_data(date, days=7)
-            
-            community_stats = {
-                'date': date,
-                'active_users': active_users,
-                'total_posts': total_posts,
-                'total_comments': total_comments,
-                'total_upvotes': total_upvotes,
-                'engagement_rate': engagement_rate,
-                'historical_data': historical_data,
-                'posts_data': posts,
-                'comments_data': comments
-            }
-            
-            # Store in database
-            self.db_manager.store_community_stats(community_stats)
-            
-            return community_stats
-            
-        except Exception as e:
-            self.logger.error(f"Error collecting community activity: {str(e)}")
-            # Return default structure instead of raising
             return {
                 'date': date,
-                'active_users': 0,
-                'total_posts': 0,
-                'total_comments': 0,
-                'total_upvotes': 0,
-                'engagement_rate': 0.0,
-                'historical_data': [],
-                'posts_data': [],
-                'comments_data': []
+                'sync_results': sync_results,
+                'membership_stats': membership_stats,
+                'community_stats': community_stats,
+                'user_activities': user_activities,
+                'top_performers': top_performers,
+                'total_tracked_members': len(user_activities)
             }
+            
+        except Exception as e:
+            self.logger.error(f"Error in daily data collection: {str(e)}")
+            raise
     
-    def get_user_activities(self, date: str) -> List[UserActivity]:
-        """Get user activity data for all tracked users"""
-        self.logger.info(f"Collecting user activities for {date}")
+    def get_user_activities_blockchain_wide(self, date: str) -> List[UserActivity]:
+        """Get blockchain-wide activity for all tracked community members"""
+        self.logger.info(f"Collecting blockchain-wide activities for {date}")
         
         try:
-            # Get list of tracked users
+            # Get all active community members
             tracked_users = self.db_manager.get_tracked_users()
             user_activities = []
             
             for username in tracked_users:
-                activity = self.get_user_activity(username, date)
-                user_activities.append(activity)
+                # Check if member is still active (joined after their activity starts)
+                join_date = self.member_manager.get_member_join_date(username)
+                if join_date:
+                    join_datetime = datetime.fromisoformat(join_date.replace('Z', '+00:00'))
+                    date_datetime = datetime.strptime(date, '%Y-%m-%d')
+                    
+                    # Only collect data for dates after they joined
+                    if date_datetime >= join_datetime.replace(tzinfo=None):
+                        activity = self.get_user_blockchain_activity(username, date)
+                        user_activities.append(activity)
+                    else:
+                        self.logger.debug(f"Skipping {username} - date {date} is before join date {join_date}")
             
-            # Store user activities in database
+            # Store activities in database
             self.db_manager.store_user_activities(user_activities, date)
             
             return user_activities
             
         except Exception as e:
-            self.logger.error(f"Error collecting user activities: {str(e)}")
-            raise
+            self.logger.error(f"Error collecting blockchain-wide activities: {str(e)}")
+            return []
     
-    def get_user_activity(self, username: str, date: str) -> UserActivity:
-        """Get activity data for a specific user"""
+    def get_user_blockchain_activity(self, username: str, date: str) -> UserActivity:
+        """Get user's blockchain-wide activity for a specific date"""
         try:
-            # Get user's posts for the date
-            posts = self.hive_api.get_user_posts(username, date, community=self.community_tag)
-            if posts is None:
-                posts = []
-            
-            # Get user's comments for the date
-            comments = self.hive_api.get_user_comments(username, date, community=self.community_tag)
-            if comments is None:
-                comments = []
-            
-            # Get upvotes given by user
-            upvotes_given = self.hive_api.get_user_upvotes_given(username, date)
-            if upvotes_given is None:
-                upvotes_given = 0
-            
-            # Get upvotes received by user
-            upvotes_received = sum(post.get('net_votes', 0) for post in posts if isinstance(post.get('net_votes'), (int, float)))
-            
-            # Calculate engagement score
-            engagement_score = self._calculate_engagement_score(
-                len(posts), len(comments), upvotes_given, upvotes_received
-            )
+            # Get comprehensive blockchain activity using the new API method
+            activity_data = self.hive_api.get_user_blockchain_activity(username, date)
             
             return UserActivity(
                 username=username,
-                posts_count=len(posts),
-                comments_count=len(comments),
-                upvotes_given=upvotes_given,
-                upvotes_received=upvotes_received,
-                engagement_score=engagement_score
+                posts_count=activity_data.get('total_posts', 0),
+                comments_count=activity_data.get('total_comments', 0),
+                upvotes_given=activity_data.get('total_votes_given', 0),
+                upvotes_received=activity_data.get('total_votes_received', 0),
+                engagement_score=activity_data.get('engagement_score', 0.0)
             )
             
         except Exception as e:
-            self.logger.error(f"Error getting user activity for {username}: {str(e)}")
+            self.logger.error(f"Error getting blockchain activity for {username}: {str(e)}")
             return UserActivity(username=username)
+    
+    def calculate_community_stats_from_members(self, user_activities: List[UserActivity], date: str) -> Dict:
+        """Calculate community statistics based on member activities"""
+        try:
+            # Aggregate member activities
+            total_posts = sum(activity.posts_count for activity in user_activities)
+            total_comments = sum(activity.comments_count for activity in user_activities)
+            total_votes_given = sum(activity.upvotes_given for activity in user_activities)
+            total_votes_received = sum(activity.upvotes_received for activity in user_activities)
+            
+            # Count active users (those with any activity)
+            active_users = len([a for a in user_activities if a.posts_count > 0 or a.comments_count > 0 or a.upvotes_given > 0])
+            
+            # Calculate engagement rate
+            total_members = len(user_activities)
+            engagement_rate = (active_users / total_members * 100) if total_members > 0 else 0.0
+            
+            # Get new members today
+            new_members_today = self.db_manager.get_new_members_count(days=1)
+            
+            community_stats = {
+                'date': date,
+                'total_members': total_members,
+                'active_users': active_users,
+                'total_posts': total_posts,
+                'total_comments': total_comments,
+                'total_upvotes': total_votes_given + total_votes_received,  # Fixed: combine for total_upvotes
+                'new_members': new_members_today,
+                'engagement_rate': engagement_rate,
+                'health_index': self._calculate_health_index(user_activities),
+                # Additional fields for detailed analytics
+                'total_votes_given': total_votes_given,
+                'total_votes_received': total_votes_received
+            }
+            
+            # Store community stats
+            self.db_manager.store_community_stats(community_stats)
+            
+            return community_stats
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating community stats: {str(e)}")
+            return {
+                'date': date,
+                'total_members': 0,
+                'active_users': 0,
+                'total_posts': 0,
+                'total_comments': 0,
+                'total_votes_given': 0,
+                'total_votes_received': 0,
+                'new_members': 0,
+                'engagement_rate': 0.0,
+                'health_index': 0.0
+            }
+    
+    def _calculate_health_index(self, user_activities: List[UserActivity]) -> float:
+        """Calculate community health index based on engagement patterns"""
+        try:
+            if not user_activities:
+                return 0.0
+            
+            total_engagement = sum(activity.engagement_score for activity in user_activities)
+            avg_engagement = total_engagement / len(user_activities)
+            
+            # Factor in distribution of engagement
+            high_engagement_users = len([a for a in user_activities if a.engagement_score > avg_engagement])
+            engagement_distribution = (high_engagement_users / len(user_activities)) * 100
+            
+            # Health index combines average engagement and distribution
+            health_index = min(100, (avg_engagement / 10) + (engagement_distribution * 0.5))
+            
+            return round(health_index, 2)
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating health index: {str(e)}")
+            return 0.0
+    
+    # Legacy methods - now handled by new blockchain-wide collection system
+    # These methods are kept for compatibility but should use the new system
+    
+    def get_community_activity(self, date: str) -> Dict:
+        """Legacy method - use collect_daily_data_with_member_sync instead"""
+        self.logger.warning("get_community_activity is deprecated - use collect_daily_data_with_member_sync")
+        return self.calculate_community_stats_from_members([], date)
+    
+    def get_user_activities(self, date: str) -> List[UserActivity]:
+        """Legacy method - use get_user_activities_blockchain_wide instead"""
+        self.logger.warning("get_user_activities is deprecated - use get_user_activities_blockchain_wide")
+        return self.get_user_activities_blockchain_wide(date)
+    
+    def get_user_activity(self, username: str, date: str) -> UserActivity:
+        """Legacy method - use get_user_blockchain_activity instead"""
+        self.logger.warning("get_user_activity is deprecated - use get_user_blockchain_activity")
+        return self.get_user_blockchain_activity(username, date)
     
     def track_business_activity(self, date: str) -> Dict:
         """Track business activity and HBD transactions"""
