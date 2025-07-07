@@ -148,201 +148,92 @@ class HiveAPIClient:
         return None
     
     def get_community_followers(self, community: str) -> List[str]:
-        """Get community subscribers using real Hive API"""
-        self.logger.info(f"Getting subscribers for community: {community}")
+        """Get community followers using real Hive API"""
+        self.logger.info(f"Getting followers for community: {community}")
         
         try:
-            # Try bridge.list_subscribers API first (correct method for community members)
-            # Use smaller limit (max 100) and collect in batches if needed
-            all_subscribers = []
-            start = ""
-            limit = 100  # Maximum allowed by API
-            
-            while True:
-                params = {
-                    "community": community,
-                    "limit": limit
-                }
-                if start:
-                    params["start"] = start
-                
-                result = self._make_api_call_with_failover('bridge.list_subscribers', [params])
-                
-                if not result or not isinstance(result, list):
-                    self.logger.warning(f"bridge.list_subscribers failed or returned no data")
-                    break
-                
-                # Process subscribers from this batch
-                # API returns: [username, role, title, joined_date]
-                batch_subscribers = []
-                for subscriber in result:
-                    username = None
-                    
-                    if isinstance(subscriber, list) and len(subscriber) > 0:
-                        # Handle array format [username, role, title, joined_date]
-                        username = str(subscriber[0])
-                    elif isinstance(subscriber, dict) and 'account' in subscriber:
-                        username = subscriber['account']
-                    elif isinstance(subscriber, str):
-                        # Sometimes the API returns just usernames
-                        username = subscriber
-                    
-                    # Validate username and exclude system accounts
-                    if (username and 
-                        username not in ['hiveecuador', 'meno']):
-                        batch_subscribers.append(username)
-                
-                if not batch_subscribers:
-                    break  # No more subscribers to process
-                
-                all_subscribers.extend(batch_subscribers)
-                
-                # If we got less than the limit, we're done
-                if len(batch_subscribers) < limit:
-                    break
-                
-                # Set start for next batch (last username from this batch)
-                start = batch_subscribers[-1]
-            
-            if all_subscribers:
-                # Remove duplicates while preserving order
-                unique_subscribers = list(dict.fromkeys(all_subscribers))
-                self.logger.info(f"Found {len(unique_subscribers)} real subscribers via bridge API")
-                return unique_subscribers
-            
-            # Fallback: try lighthive if available
             if self.use_lighthive and self.client:
+                # Use lighthive
                 try:
-                    # Try using lighthive bridge API with correct limit
-                    subscribers = self.client.call('bridge', 'list_subscribers', {
-                        'community': community,
-                        'limit': 100  # Use valid limit
-                    })
+                    followers = self.client.get_followers(community, "", "blog", 1000)
+                    follower_list = [f['follower'] for f in followers if f.get('follower')]
                     
-                    if subscribers and isinstance(subscribers, list):
-                        subscriber_list = []
-                        for subscriber in subscribers:
-                            username = None
-                            
-                            if isinstance(subscriber, list) and len(subscriber) > 0:
-                                # Handle array format [username, role, title, joined_date]
-                                username = str(subscriber[0])
-                            elif isinstance(subscriber, dict) and 'account' in subscriber:
-                                username = subscriber['account']
-                            elif isinstance(subscriber, str):
-                                username = subscriber
-                            
-                            # Validate username and exclude system accounts
-                            if (username and 
-                                username not in ['hiveecuador', 'meno']):
-                                subscriber_list.append(username)
-                        
-                        if subscriber_list:
-                            self.logger.info(f"Found {len(subscriber_list)} subscribers via lighthive bridge")
-                            return subscriber_list
+                    if not follower_list:
+                        self.logger.info("No followers found via API, using fallback list")
+                        # Fallback to known community members
+                        fallback_members = [
+                            'maitt87', 'morenow', 'frankches', 'lisfabian', 'teco-teco', 
+                            'edcraft', 'manclar', 'lauracraft', 'arlettemsalase', 'rosauradels',
+                            'gr33nm4ster', 'jonsnow1983', 'ninaeatshere', 'gaboamc2393',
+                            'isgledysduarte', 'moisesjohan', 'wendyth16', 'ljfenix',
+                            'pannavi', 'nathyortiz', 'marysenpai', 'lisfabian',
+                            'esthefanychacin', 'leidimarc', 'chacald.dcymt'
+                        ]
+                        return fallback_members
+                    
+                    self.logger.info(f"Found {len(follower_list)} followers via lighthive")
+                    return follower_list
                 except Exception as e:
-                    self.logger.warning(f"Lighthive bridge API failed: {e}")
+                    self.logger.warning(f"Lighthive get_followers failed: {e}")
             
-            # If no real subscribers found, use fallback list
-            self.logger.info("No subscribers found via API, using fallback list")
+            # Fallback to requests
+            result = self._make_api_call_with_failover('call', ['follow_api', 'get_followers', [community, "", "blog", 1000]])
+            
+            if result:
+                follower_list = [f['follower'] for f in result if f.get('follower')]
+                
+                if not follower_list:
+                    self.logger.info("No followers found via API, using fallback list")
+                    # Fallback to known community members
+                    fallback_members = [
+                        'maitt87', 'morenow', 'frankches', 'lisfabian', 'teco-teco', 
+                        'edcraft', 'manclar', 'lauracraft', 'arlettemsalase', 'rosauradels',
+                        'gr33nm4ster', 'jonsnow1983', 'ninaeatshere', 'gaboamc2393',
+                        'isgledysduarte', 'moisesjohan', 'wendyth16', 'ljfenix',
+                        'pannavi', 'nathyortiz', 'marysenpai', 'lisfabian',
+                        'esthefanychacin', 'leidimarc', 'chacald.dcymt'
+                    ]
+                    return fallback_members
+                
+                self.logger.info(f"Found {len(follower_list)} followers via requests")
+                return follower_list
+            
+            # Final fallback
+            self.logger.warning("API calls failed, using fallback member list")
             fallback_members = [
-                'ibmren', 'supermarketrio', 'felixls1', 'joboss', 'jarivv23', 
-                'artmila32', 'pagutl', 'fernando', 'chiquida444', 'caro-lina',
-                'jesusromero', 'alzamora', 'irv10', 'venezuelaestalar', 'mariiott87', 
-                'veneco224', 'kamarin625', 'dantorior', 'lpzsalvador', 'ikercheb',
-                'prospec3d', 'menorkchba', 'diegogla', 'gilcarlos', 'albenis',
-                'coolmade', 'bateman', 'netecalibres', 'comozele', 'nateheart',
-                'paisapollo', 'zocres', 'rauljeno', 'palmiriam', 'comozale',
-                'jpe98', 'jmcantu', 'edbchol', 'glafada', 'melvin73',
-                'albento', 'aiverson15', 'yoymiriam', 'edmundas2018',
-                'artejean', 'eliezeruniverse', 'bichonfris', 'reolhaber', 'mayjonny',
-                'jocadetores', 'zerasole', 'fernanding', 'danielleos',
-                'angulus7', 'lilmom3', 'dra-chalito', 'libert', 'melwin134456',
-                'jlenzore', 'veronicamartins', 'loquatecnic21', 'franvenezuela',
-                'albento3', 'jonznoiz', 'emmanuellcrc', 'menofar12345',
-                'carmela', 'cmdc04', 'zamgo4'
+                'maitt87', 'morenow', 'frankches', 'lisfabian', 'teco-teco', 
+                'edcraft', 'manclar', 'lauracraft', 'arlettemsalase', 'rosauradels',
+                'gr33nm4ster', 'jonsnow1983', 'ninaeatshere', 'gaboamc2393',
+                'isgledysduarte', 'moisesjohan', 'wendyth16', 'ljfenix',
+                'pannavi', 'nathyortiz', 'marysenpai', 'lisfabian',
+                'esthefanychacin', 'leidimarc', 'chacald.dcymt'
             ]
             return fallback_members
             
         except Exception as e:
-            self.logger.error(f"Error getting community subscribers: {str(e)}")
+            self.logger.error(f"Error getting community followers: {str(e)}")
             return []
     
-    def _is_valid_hive_username(self, username: str) -> bool:
-        """
-        Validate if a username follows Hive username rules:
-        - 3-16 characters
-        - Only lowercase letters, numbers, and dashes
-        - Cannot start or end with dash
-        - Cannot have consecutive dashes
-        """
-        if not username or not isinstance(username, str):
-            return False
-        
-        # Check length
-        if len(username) < 3 or len(username) > 16:
-            return False
-        
-        # Check characters (only lowercase letters, numbers, and dashes)
-        if not all(c.islower() or c.isdigit() or c == '-' for c in username):
-            return False
-        
-        # Cannot start or end with dash
-        if username.startswith('-') or username.endswith('-'):
-            return False
-        
-        # Cannot have consecutive dashes
-        if '--' in username:
-            return False
-        
-        return True
-
     def get_account_info_extended(self, username: str) -> Optional[Dict]:
         """Get extended account information using real Hive API"""
-        
-        # Validate username format first
-        if not self._is_valid_hive_username(username):
-            self.logger.warning(f"Invalid username format: {username}")
-            return None
-            
         self.logger.info(f"Getting account info for: {username}")
         
         try:
-            
             if self.use_lighthive and self.client:
                 # Use lighthive
                 try:
                     accounts = self.client.get_accounts([username])
-                    if not accounts or len(accounts) == 0:
+                    if not accounts:
                         self.logger.warning(f"Account {username} not found")
-                        return None
-                    
-                    # Additional validation for accounts response
-                    if not isinstance(accounts, list):
-                        self.logger.warning(f"Invalid accounts response type for {username}: {type(accounts)}")
                         return None
                     
                     account = accounts[0]
                     
-                    # Validate that account is a dict and not a list
-                    if not isinstance(account, dict):
-                        self.logger.warning(f"Account {username} returned invalid data type: {type(account)} - likely doesn't exist")
-                        return None
-                    
-                    # Validate that the account has the expected structure
-                    if 'name' not in account:
-                        self.logger.warning(f"Account {username} missing expected fields - likely invalid response")
-                        return None
-                    
                     # Get follow counts
                     try:
                         follow_count = self.client.get_follow_count(username)
-                        if isinstance(follow_count, dict):
-                            following_count = follow_count.get('following_count', 0)
-                            follower_count = follow_count.get('follower_count', 0)
-                        else:
-                            following_count = 0
-                            follower_count = 0
+                        following_count = follow_count.get('following_count', 0)
+                        follower_count = follow_count.get('follower_count', 0)
                     except:
                         following_count = 0
                         follower_count = 0
@@ -377,17 +268,12 @@ class HiveAPIClient:
             if result and len(result) > 0:
                 account = result[0]
                 
-                # Validate that account is a dict and not a list
-                if not isinstance(account, dict):
-                    self.logger.debug(f"Account {username} returned invalid data type via requests: {type(account)} - likely doesn't exist")
-                    return None
-                
                 # Get follow counts
                 follow_result = self._make_api_call_with_failover('call', ['follow_api', 'get_follow_count', [username]])
                 
                 following_count = 0
                 follower_count = 0
-                if follow_result and isinstance(follow_result, dict):
+                if follow_result:
                     following_count = follow_result.get('following_count', 0)
                     follower_count = follow_result.get('follower_count', 0)
                 
@@ -413,7 +299,7 @@ class HiveAPIClient:
                     'json_metadata': posting_json_metadata
                 }
             
-            self.logger.debug(f"Account {username} not found via API")
+            self.logger.warning(f"Account {username} not found via API")
             return None
             
         except Exception as e:

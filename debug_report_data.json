@@ -1,0 +1,117 @@
+{
+  "date": "2025-07-07",
+  "community_stats": {
+    "date": "2025-07-07",
+    "total_members": 0,
+    "active_users": 0,
+    "total_posts": 0,
+    "total_comments": 0,
+    "total_upvotes": 0,
+    "new_members": 72,
+    "engagement_rate": 0.0,
+    "health_index": 0.0,
+    "total_votes_given": 0,
+    "total_votes_received": 0,
+    "historical_data": [
+      {
+        "date": "2025-07-01",
+        "active_users": 4,
+        "total_posts": 2,
+        "total_comments": 2,
+        "total_upvotes": 25,
+        "new_users": 0,
+        "engagement_rate": 1.0,
+        "health_index": 0.0,
+        "timestamp": "2025-07-07 03:29:47"
+      },
+      {
+        "date": "2025-07-02",
+        "active_users": 4,
+        "total_posts": 2,
+        "total_comments": 2,
+        "total_upvotes": 25,
+        "new_users": 0,
+        "engagement_rate": 1.0,
+        "health_index": 0.0,
+        "timestamp": "2025-07-07 03:29:46"
+      },
+      {
+        "date": "2025-07-03",
+        "active_users": 4,
+        "total_posts": 2,
+        "total_comments": 2,
+        "total_upvotes": 25,
+        "new_users": 0,
+        "engagement_rate": 1.0,
+        "health_index": 0.0,
+        "timestamp": "2025-07-07 03:29:46"
+      },
+      {
+        "date": "2025-07-04",
+        "active_users": 4,
+        "total_posts": 2,
+        "total_comments": 2,
+        "total_upvotes": 25,
+        "new_users": 0,
+        "engagement_rate": 1.0,
+        "health_index": 0.0,
+        "timestamp": "2025-07-07 03:29:48"
+      },
+      {
+        "date": "2025-07-05",
+        "active_users": 4,
+        "total_posts": 2,
+        "total_comments": 2,
+        "total_upvotes": 25,
+        "new_users": 0,
+        "engagement_rate": 1.0,
+        "health_index": 0.0,
+        "timestamp": "2025-07-07 03:29:48"
+      },
+      {
+        "date": "2025-07-06",
+        "active_users": 4,
+        "total_posts": 2,
+        "total_comments": 2,
+        "total_upvotes": 25,
+        "new_users": 0,
+        "engagement_rate": 1.0,
+        "health_index": 0.0,
+        "timestamp": "2025-07-07 03:29:50"
+      },
+      {
+        "date": "2025-07-07",
+        "active_users": 0,
+        "total_posts": 0,
+        "total_comments": 0,
+        "total_upvotes": 0,
+        "new_users": 0,
+        "engagement_rate": 0.0,
+        "health_index": 0.0,
+        "timestamp": "2025-07-07 22:18:21"
+      }
+    ]
+  },
+  "user_activities_count": 0,
+  "top_performers": {
+    "top_poster": {
+      "users": [],
+      "count": 0
+    },
+    "top_commenter": {
+      "users": [],
+      "count": 0
+    },
+    "top_supporter": {
+      "users": [],
+      "count": 0
+    },
+    "top_engagement": {
+      "user": null,
+      "score": 0
+    },
+    "rising_star": null,
+    "consistent_contributor": null
+  },
+  "chart_files_count": 5
+}

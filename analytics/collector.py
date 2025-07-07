@@ -101,16 +101,23 @@ class AnalyticsCollector:
             for username in tracked_users:
                 # Check if member is still active (joined after their activity starts)
                 join_date = self.member_manager.get_member_join_date(username)
+                should_collect = True
+                
                 if join_date:
+                    # If we have a join date, only collect data for dates after they joined
                     join_datetime = datetime.fromisoformat(join_date.replace('Z', '+00:00'))
                     date_datetime = datetime.strptime(date, '%Y-%m-%d')
+                    should_collect = date_datetime >= join_datetime.replace(tzinfo=None)
                     
-                    # Only collect data for dates after they joined
-                    if date_datetime >= join_datetime.replace(tzinfo=None):
-                        activity = self.get_user_blockchain_activity(username, date)
-                        user_activities.append(activity)
-                    else:
+                    if not should_collect:
                         self.logger.debug(f"Skipping {username} - date {date} is before join date {join_date}")
+                else:
+                    # If no join date, assume they're a legacy member and collect data
+                    self.logger.debug(f"No join date for {username} - treating as legacy member")
+                
+                if should_collect:
+                    activity = self.get_user_blockchain_activity(username, date)
+                    user_activities.append(activity)
             
             # Store activities in database
             self.db_manager.store_user_activities(user_activities, date)
