@@ -137,18 +137,21 @@ class DatabaseManager:
             with self.get_connection() as conn:
                 for activity in user_activities:
                     conn.execute("""
-                        INSERT OR REPLACE INTO daily_activity 
-                        (date, username, posts_count, comments_count, upvotes_given, 
-                         upvotes_received, engagement_score)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT OR REPLACE INTO user_activities 
+                        (username, date, posts_count, comments_count, votes_count, 
+                         total_rewards, avg_reward_per_post, engagement_score, activity_score, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
-                        date,
                         activity.username,
+                        date,
                         activity.posts_count,
                         activity.comments_count,
-                        activity.upvotes_given,
-                        activity.upvotes_received,
-                        activity.engagement_score
+                        activity.upvotes_given,  # using upvotes_given as votes_count
+                        0.0,  # total_rewards - placeholder
+                        0.0,  # avg_reward_per_post - placeholder  
+                        activity.engagement_score,
+                        activity.engagement_score,  # using engagement_score as activity_score
+                        datetime.now().isoformat()
                     ))
                 conn.commit()
                 

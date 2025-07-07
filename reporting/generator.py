@@ -207,7 +207,8 @@ Este es nuestro análisis comprensivo de la actividad en Hive Ecuador, donde cel
     def generate_community_health_section(self, data: Dict) -> str:
         """Generate community health section"""
         try:
-            community_data = data.get('community', {})
+            # Try both 'community_stats' (new format) and 'community' (legacy format)
+            community_data = data.get('community_stats', data.get('community', {}))
             if not community_data:
                 self.logger.warning("No community data available")
                 return "## 📊 SALUD DE LA COMUNIDAD\n\n*Datos no disponibles actualmente*\n\n---\n"

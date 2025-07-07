@@ -168,16 +168,15 @@ class HiveEcuadorPulse:
             post_result = self.hive_api.post_content(
                 title=f"🇪🇨 Hive Ecuador Pulse - Daily Report {datetime.now().strftime('%B %d, %Y')}",
                 body=final_content,
-                tags=['hive-ecuador', 'analytics', 'community', 'daily-report', 'pulse'],
-                community='hive-115276'
+                tags=['hive-ecuador', 'analytics', 'community', 'daily-report', 'pulse']
             )
             
             if post_result:
                 # Record successful report in database
                 self.db_manager.record_generated_report(
                     date=datetime.now().strftime('%Y-%m-%d'),
-                    post_author=self.config['posting_account'],
-                    post_permlink=post_result['permlink'],
+                    post_author=self.config.get('posting_account', 'hiveecuador'),
+                    post_permlink=f"pulse-{datetime.now().strftime('%Y-%m-%d')}",  # Generate permlink
                     charts_generated=len(images),
                     success=True
                 )
@@ -327,11 +326,27 @@ def main():
         if args.generate_report:
             print("Generating test report...")
             content, images = bot.create_daily_report()
+            
+            # Save report to file
+            date_str = datetime.now().strftime('%Y-%m-%d')
+            report_filename = f"report_{date_str}_{datetime.now().strftime('%H%M%S')}.md"
+            
+            with open(report_filename, 'w', encoding='utf-8') as f:
+                f.write(content)
+            
             print("Test report generated successfully!")
+            print(f"Report saved to: {report_filename}")
             if images:
                 print(f"Generated {len(images)} charts:")
                 for img in images:
                     print(f"  - {img}")
+            
+            # Display a preview of the report
+            print("\n" + "="*60)
+            print("REPORT PREVIEW:")
+            print("="*60)
+            print(content[:1000] + "..." if len(content) > 1000 else content)
+            print("="*60)
             return
         
         # Run the bot normally

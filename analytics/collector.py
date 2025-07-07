@@ -124,16 +124,41 @@ class AnalyticsCollector:
     def get_user_blockchain_activity(self, username: str, date: str) -> UserActivity:
         """Get user's blockchain-wide activity for a specific date"""
         try:
-            # Get comprehensive blockchain activity using the new API method
-            activity_data = self.hive_api.get_user_blockchain_activity(username, date)
+            # Get comprehensive blockchain activity using the new API method (days=1 for single day)
+            raw_activities = self.hive_api.get_user_blockchain_activity(username, days=1)
+            
+            # Process raw activities to count different types
+            posts_count = 0
+            comments_count = 0
+            upvotes_given = 0
+            upvotes_received = 0
+            
+            for activity in raw_activities:
+                activity_type = activity.get('type', '')
+                
+                if activity_type == 'comment':
+                    # Check if it's a post (parent_author is empty) or comment
+                    op_data = activity.get('data', {}).get('op', [None, {}])
+                    if len(op_data) > 1:
+                        comment_data = op_data[1]
+                        if comment_data.get('parent_author', '') == '':
+                            posts_count += 1
+                        else:
+                            comments_count += 1
+                elif activity_type == 'vote':
+                    upvotes_given += 1
+            
+            # Calculate engagement score
+            total_activity = posts_count + comments_count + upvotes_given
+            engagement_score = min(total_activity * 0.1, 10.0)  # Cap at 10.0
             
             return UserActivity(
                 username=username,
-                posts_count=activity_data.get('total_posts', 0),
-                comments_count=activity_data.get('total_comments', 0),
-                upvotes_given=activity_data.get('total_votes_given', 0),
-                upvotes_received=activity_data.get('total_votes_received', 0),
-                engagement_score=activity_data.get('engagement_score', 0.0)
+                posts_count=posts_count,
+                comments_count=comments_count,
+                upvotes_given=upvotes_given,
+                upvotes_received=upvotes_received,  # TODO: Need separate API call for this
+                engagement_score=engagement_score
             )
             
         except Exception as e:
@@ -257,11 +282,9 @@ class AnalyticsCollector:
             business_volumes = {}
             
             for business in businesses:
-                # Get HBD transactions for this business
-                transactions = self.hive_api.get_hbd_transactions(
-                    username=business.get('username', ''),
-                    date=date
-                )
+                # TODO: Implement HBD transaction tracking
+                # For now, use placeholder data
+                transactions = []  # self.hive_api.get_hbd_transactions(business.get('username', ''), date)
                 
                 if transactions is None:
                     transactions = []
