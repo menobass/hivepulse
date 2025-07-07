@@ -1,0 +1,7 @@
+# Charts directory
+# This directory contains generated charts
+
+*.png
+*.jpg
+*.jpeg
+*.gif

@@ -1,0 +1,52 @@
+{
+  "bot_name": "Hive Ecuador Pulse",
+  "version": "1.0.0",
+  "community": "hive-115276",
+  "posting_account": "hiveecuador",
+  "report_time": "21:00",
+  "timezone": "America/Guayaquil",
+  "database_file": "pulse_analytics.db",
+  "charts_directory": "charts",
+  "assets_directory": "assets",
+  "dry_run": true,
+  "generate_test_report": false,
+  "hive_node": "https://api.hive.blog",
+  
+  "tracking": {
+    "lookback_days": 30,
+    "chart_days": 7,
+    "min_activity_threshold": 1
+  },
+  
+  "visual_theme": {
+    "ecuador_colors": {
+      "yellow": "#FFDD00",
+      "blue": "#0052CC",
+      "red": "#FF0000"
+    },
+    "chart_style": "professional",
+    "font_family": "Arial",
+    "logo_path": "assets/hive_ecuador_pulse_logo.png"
+  },
+  
+  "business_tracking": {
+    "monitor_transfers": true,
+    "min_transfer_amount": 0.001,
+    "track_incoming_only": false
+  },
+  
+  "post_template": {
+    "header_image": true,
+    "include_charts": true,
+    "max_images": 10,
+    "markdown_formatting": true
+  },
+  
+  "management": {
+    "allow_user_commands": true,
+    "admin_users": ["menobass"],
+    "command_prefix": "!pulse"
+  },
+  
+  "log_level": "INFO"
+}

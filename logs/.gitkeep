@@ -1,0 +1,4 @@
+# Logs directory
+# This directory contains application logs
+
+*.log
