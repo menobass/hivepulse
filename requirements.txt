@@ -1,4 +1,4 @@
-lighthive>=1.0.0
+lighthive>=0.4.0
 requests>=2.25.1
 matplotlib>=3.5.0
 seaborn>=0.11.0
@@ -9,4 +9,3 @@ Pillow>=8.3.0
 python-dotenv>=0.19.0
 APScheduler>=3.8.0
 pytz>=2021.3
-sqlite3
