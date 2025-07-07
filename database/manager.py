@@ -34,6 +34,9 @@ class DatabaseManager:
         
         try:
             with self.get_connection() as conn:
+                # Create only the legacy tables that are still needed
+                # (The main tables are created by migrations)
+                
                 # Create daily activity tracking table
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS daily_activity (
@@ -65,19 +68,6 @@ class DatabaseManager:
                     )
                 """)
                 
-                # Create business registry table
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS business_registry (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        username TEXT UNIQUE NOT NULL,
-                        business_name TEXT NOT NULL,
-                        category TEXT,
-                        description TEXT,
-                        added_date DATE DEFAULT CURRENT_DATE,
-                        active BOOLEAN DEFAULT 1
-                    )
-                """)
-                
                 # Create HBD transaction tracking table
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS hbd_transactions (
@@ -89,18 +79,6 @@ class DatabaseManager:
                         memo TEXT,
                         transaction_id TEXT UNIQUE,
                         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                
-                # Create user registry table
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS user_registry (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        username TEXT UNIQUE NOT NULL,
-                        added_date DATE DEFAULT CURRENT_DATE,
-                        active BOOLEAN DEFAULT 1,
-                        first_seen DATE,
-                        last_activity DATE
                     )
                 """)
                 
@@ -121,7 +99,6 @@ class DatabaseManager:
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_daily_activity_date ON daily_activity(date)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_community_stats_date ON community_stats(date)")
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_hbd_transactions_date ON hbd_transactions(date)")
-                conn.execute("CREATE INDEX IF NOT EXISTS idx_user_registry_username ON user_registry(username)")
                 
                 conn.commit()
                 self.logger.info("Database initialized successfully")
@@ -225,7 +202,7 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.execute("""
-                    SELECT username FROM user_registry WHERE active = 1
+                    SELECT username FROM users WHERE is_active = 1
                 """)
                 
                 return [row[0] for row in cursor.fetchall()]
@@ -239,7 +216,9 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.execute("""
-                    SELECT * FROM business_registry WHERE active = 1
+                    SELECT username, display_name, business_description, created_at
+                    FROM users 
+                    WHERE is_business = 1 AND is_active = 1
                 """)
                 
                 return [dict(row) for row in cursor.fetchall()]
@@ -252,11 +231,12 @@ class DatabaseManager:
         """Add a user to tracking"""
         try:
             with self.get_connection() as conn:
+                now = datetime.now().isoformat()
                 conn.execute("""
-                    INSERT OR REPLACE INTO user_registry 
-                    (username, first_seen, last_activity)
-                    VALUES (?, CURRENT_DATE, CURRENT_DATE)
-                """, (username,))
+                    INSERT OR REPLACE INTO users 
+                    (username, display_name, created_at, updated_at, is_active, is_business)
+                    VALUES (?, ?, ?, ?, 1, 0)
+                """, (username, username, now, now))
                 conn.commit()
                 
                 self.logger.info(f"Added user {username} to tracking")
@@ -270,9 +250,10 @@ class DatabaseManager:
         """Remove a user from tracking"""
         try:
             with self.get_connection() as conn:
+                now = datetime.now().isoformat()
                 conn.execute("""
-                    UPDATE user_registry SET active = 0 WHERE username = ?
-                """, (username,))
+                    UPDATE users SET is_active = 0, updated_at = ? WHERE username = ?
+                """, (now, username))
                 conn.commit()
                 
                 self.logger.info(f"Removed user {username} from tracking")
@@ -286,11 +267,23 @@ class DatabaseManager:
         """Add a business to tracking"""
         try:
             with self.get_connection() as conn:
+                now = datetime.now().isoformat()
+                # First ensure the user exists
                 conn.execute("""
-                    INSERT OR REPLACE INTO business_registry 
-                    (username, business_name, category, description)
-                    VALUES (?, ?, ?, ?)
-                """, (username, business_name, category, description))
+                    INSERT OR IGNORE INTO users 
+                    (username, display_name, created_at, updated_at, is_active, is_business)
+                    VALUES (?, ?, ?, ?, 1, 1)
+                """, (username, username, now, now))
+                
+                # Then update them as a business
+                conn.execute("""
+                    UPDATE users SET 
+                        is_business = 1, 
+                        business_description = ?, 
+                        updated_at = ?
+                    WHERE username = ?
+                """, (description or business_name, now, username))
+                
                 conn.commit()
                 
                 self.logger.info(f"Added business {business_name} ({username}) to tracking")
@@ -304,9 +297,10 @@ class DatabaseManager:
         """Remove a business from tracking"""
         try:
             with self.get_connection() as conn:
+                now = datetime.now().isoformat()
                 conn.execute("""
-                    UPDATE business_registry SET active = 0 WHERE username = ?
-                """, (username,))
+                    UPDATE users SET is_business = 0, updated_at = ? WHERE username = ?
+                """, (now, username))
                 conn.commit()
                 
                 self.logger.info(f"Removed business {username} from tracking")

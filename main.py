@@ -7,6 +7,7 @@ Main entry point for the bot application
 import os
 import sys
 import logging
+import argparse
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -17,6 +18,7 @@ from analytics.collector import AnalyticsCollector
 from visualization.charts import ChartGenerator
 from reporting.generator import ReportGenerator
 from database.manager import DatabaseManager
+from database.migrations import InitialMigration, AddUserTagsMigration
 from management.user_manager import UserManager
 from management.scheduler import ReportScheduler
 from utils.hive_api import HiveAPIClient
@@ -42,6 +44,36 @@ class HiveEcuadorPulse:
         
         self.logger.info("Hive Ecuador Pulse Bot initialized successfully")
     
+    def initialize_database(self):
+        """Initialize database using migrations"""
+        self.logger.info("Initializing database using migrations...")
+        
+        try:
+            # Run initial migration
+            initial_migration = InitialMigration()
+            with self.db_manager.get_connection() as conn:
+                if initial_migration.up(conn):
+                    self.logger.info("Initial migration completed successfully")
+                else:
+                    self.logger.error("Initial migration failed")
+                    return False
+            
+            # Run additional migrations
+            tags_migration = AddUserTagsMigration()
+            with self.db_manager.get_connection() as conn:
+                if tags_migration.up(conn):
+                    self.logger.info("User tags migration completed successfully")
+                else:
+                    self.logger.error("User tags migration failed")
+                    return False
+            
+            self.logger.info("Database initialization completed successfully")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"Error initializing database: {str(e)}")
+            return False
+
     def collect_daily_data(self, date: Optional[str] = None) -> Dict:
         """Collect all daily analytics data"""
         if date is None:
@@ -223,11 +255,64 @@ class HiveEcuadorPulse:
 
 def main():
     """Main function to run the bot"""
+    parser = argparse.ArgumentParser(description='Hive Ecuador Pulse Analytics Bot')
+    parser.add_argument('--init-db', action='store_true', 
+                       help='Initialize database with required tables')
+    parser.add_argument('--config', type=str, default='config/pulse_config.json',
+                       help='Path to configuration file')
+    parser.add_argument('--generate-report', action='store_true',
+                       help='Generate a test report')
+    parser.add_argument('--add-user', type=str, metavar='USERNAME',
+                       help='Add a user to tracking')
+    parser.add_argument('--list-users', action='store_true',
+                       help='List all tracked users')
+    
+    args = parser.parse_args()
+    
     try:
         # Create bot instance
-        bot = HiveEcuadorPulse()
+        bot = HiveEcuadorPulse(args.config)
         
-        # Run the bot
+        # Handle command-line operations
+        if args.init_db:
+            print("Initializing database...")
+            if bot.initialize_database():
+                print("Database initialized successfully!")
+            else:
+                print("Database initialization failed!")
+                sys.exit(1)
+            return
+            
+        if args.add_user:
+            print(f"Adding user '{args.add_user}' to tracking...")
+            if bot.user_manager.add_user(args.add_user):
+                print(f"User '{args.add_user}' added successfully!")
+            else:
+                print(f"Failed to add user '{args.add_user}'")
+                sys.exit(1)
+            return
+            
+        if args.list_users:
+            users = bot.db_manager.get_tracked_users()
+            if users:
+                print("Tracked users:")
+                for username in users:
+                    print(f"  - @{username}")
+            else:
+                print("No users being tracked yet.")
+            return
+            
+        if args.generate_report:
+            print("Generating test report...")
+            content, images = bot.create_daily_report()
+            print("Test report generated successfully!")
+            if images:
+                print(f"Generated {len(images)} charts:")
+                for img in images:
+                    print(f"  - {img}")
+            return
+        
+        # Run the bot normally
         bot.run()
         
     except Exception as e:
