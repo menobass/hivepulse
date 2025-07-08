@@ -44,8 +44,20 @@
   
   "management": {
     "allow_user_commands": true,
-    "admin_users": ["menobass"],
+    "admin_users": ["meno"],
     "command_prefix": "!pulse"
+  },
+  
+  "patacoin_system": {
+    "enabled": true,
+    "post_reward": 2.0,
+    "comment_reward": 0.5,
+    "vote_reward": 0.02,
+    "vote_daily_cap": 0.5,
+    "received_vote_reward": 0.1,
+    "display_name": "Patacoins",
+    "symbol": "🪙",
+    "redemption_enabled": false
   },
   
   "log_level": "INFO"

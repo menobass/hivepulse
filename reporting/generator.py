@@ -46,6 +46,10 @@ class ReportGenerator:
 
 Este es nuestro análisis comprensivo de la actividad en Hive Ecuador, donde celebramos nuestros logros, reconocemos a nuestros miembros más activos y monitoreamos el crecimiento de nuestra economía comunitaria.
 
+### 🪙 ¡NUEVO! Sistema de Patacoins
+
+Ahora recompensamos la participación activa con **Patacoins** - ¡nuestra moneda comunitaria virtual! Participa activamente y gana Patacoins que pronto podrás canjear por premios y beneficios especiales. 🎁
+
 ---
 """,
             
@@ -76,18 +80,38 @@ Este es nuestro análisis comprensivo de la actividad en Hive Ecuador, donde cel
 
 **📝 Campeón de Posts:** {top_poster}
 - {top_poster_count} posts publicados {poster_emoji}
+- 🪙 Patacoins ganadas: {top_poster_patacoins}
 
 **💬 Maestro de Comentarios:** {top_commenter}
 - {top_commenter_count} comentarios realizados {commenter_emoji}
+- 🪙 Patacoins ganadas: {top_commenter_patacoins}
 
 **👍 Estrella del Apoyo:** {top_supporter}
 - {top_supporter_count} upvotes otorgados {supporter_emoji}
+- 🪙 Patacoins ganadas: {top_supporter_patacoins}
 
 **🚀 Estrella en Ascenso:** {rising_star}
 - {rising_star_improvement}
+- 🪙 Patacoins ganadas: {rising_star_patacoins}
 
 **🎯 Contribuidor Consistente:** {consistent_contributor}
 - {consistency_description}
+- 🪙 Patacoins ganadas: {consistent_contributor_patacoins}
+
+### 🪙 SISTEMA DE PATACOINS
+
+¡Nuestra comunidad ahora recompensa la participación activa con **Patacoins**! 🎉
+
+**💰 Patacoins Repartidas Hoy:** {total_patacoins_today}
+**🏆 Top Ganador:** {top_patacoin_earner}
+
+#### 💡 ¿Cómo Ganar Patacoins?
+- 📝 **Publicar posts:** 2.0 Patacoins por post
+- 💬 **Comentar activamente:** 0.5 Patacoins por comentario  
+- 👍 **Dar upvotes:** 0.02 Patacoins por upvote (máx 0.5/día)
+- ⭐ **Recibir upvotes:** 0.1 Patacoins por upvote recibido
+
+*¡Las Patacoins serán canjeables por premios y beneficios especiales en el futuro!* 🎁
 
 ### 📈 Análisis de Engagement
 
@@ -272,6 +296,7 @@ Este es nuestro análisis comprensivo de la actividad en Hive Ecuador, donde cel
         """Generate individual spotlight section"""
         try:
             top_performers = data.get('top_performers', {})
+            user_activities = data.get('user_activities', [])
             
             # Handle empty or None top_performers
             if not top_performers:
@@ -287,6 +312,11 @@ Este es nuestro análisis comprensivo de la actividad en Hive Ecuador, donde cel
             top_commenter_count = top_performers.get('top_commenter', {}).get('count', 0)
             top_supporter_count = top_performers.get('top_supporter', {}).get('count', 0)
             
+            # Get Patacoins data for top performers
+            top_poster_patacoins = self._get_patacoins_for_user(user_activities, top_performers.get('top_poster', {}).get('username', ''))
+            top_commenter_patacoins = self._get_patacoins_for_user(user_activities, top_performers.get('top_commenter', {}).get('username', ''))
+            top_supporter_patacoins = self._get_patacoins_for_user(user_activities, top_performers.get('top_supporter', {}).get('username', ''))
+            
             # Get emojis
             poster_emoji = get_growth_emoji(top_poster_count * 5)
             commenter_emoji = get_engagement_emoji(top_commenter_count / 5 if top_commenter_count > 0 else 0)
@@ -298,9 +328,20 @@ Este es nuestro análisis comprensivo de la actividad en Hive Ecuador, donde cel
             
             rising_star_name = rising_star.get('username', 'N/A') if rising_star else 'N/A'
             rising_star_improvement = f"Puntuación de engagement: {rising_star.get('engagement_score', 0):.1f}" if rising_star else "N/A"
+            rising_star_patacoins = self._get_patacoins_for_user(user_activities, rising_star_name)
             
             consistent_contributor_name = consistent_contributor.get('username', 'N/A') if consistent_contributor else 'N/A'
             consistency_description = f"Puntuación de consistencia: {consistent_contributor.get('consistency_score', 0)}" if consistent_contributor else "N/A"
+            consistent_contributor_patacoins = self._get_patacoins_for_user(user_activities, consistent_contributor_name)
+            
+            # Calculate Patacoin statistics
+            total_patacoins_today = sum(activity.get('patacoins_earned', 0.0) for activity in user_activities if isinstance(activity, dict))
+            if not total_patacoins_today and user_activities:
+                # Handle if user_activities contains UserActivity objects
+                total_patacoins_today = sum(getattr(activity, 'patacoins_earned', 0.0) for activity in user_activities)
+            
+            # Find top Patacoin earner
+            top_patacoin_earner = self._get_top_patacoin_earner(user_activities)
             
             # Generate engagement analysis
             engagement_analysis = self._generate_engagement_analysis(data)
@@ -309,16 +350,23 @@ Este es nuestro análisis comprensivo de la actividad en Hive Ecuador, donde cel
                 top_poster=top_poster,
                 top_poster_count=top_poster_count,
                 poster_emoji=poster_emoji,
+                top_poster_patacoins=f"{top_poster_patacoins:.1f}" if top_poster_patacoins > 0 else "0.0",
                 top_commenter=top_commenter,
                 top_commenter_count=top_commenter_count,
                 commenter_emoji=commenter_emoji,
+                top_commenter_patacoins=f"{top_commenter_patacoins:.1f}" if top_commenter_patacoins > 0 else "0.0",
                 top_supporter=top_supporter,
                 top_supporter_count=top_supporter_count,
                 supporter_emoji=supporter_emoji,
+                top_supporter_patacoins=f"{top_supporter_patacoins:.1f}" if top_supporter_patacoins > 0 else "0.0",
                 rising_star=rising_star_name,
                 rising_star_improvement=rising_star_improvement,
+                rising_star_patacoins=f"{rising_star_patacoins:.1f}" if rising_star_patacoins > 0 else "0.0",
                 consistent_contributor=consistent_contributor_name,
                 consistency_description=consistency_description,
+                consistent_contributor_patacoins=f"{consistent_contributor_patacoins:.1f}" if consistent_contributor_patacoins > 0 else "0.0",
+                total_patacoins_today=f"{total_patacoins_today:.1f}" if total_patacoins_today > 0 else "0.0",
+                top_patacoin_earner=top_patacoin_earner,
                 engagement_analysis=engagement_analysis
             )
             
@@ -614,3 +662,57 @@ Este es nuestro análisis comprensivo de la actividad en Hive Ecuador, donde cel
             
         except Exception as e:
             return "Resumen de transacciones en progreso... 💼"
+    
+    def _get_patacoins_for_user(self, user_activities: List, username: str) -> float:
+        """Get Patacoins earned for a specific user"""
+        try:
+            if not user_activities or not username or username == 'N/A':
+                return 0.0
+            
+            for activity in user_activities:
+                # Handle both dict and UserActivity object formats
+                if isinstance(activity, dict):
+                    if activity.get('username') == username:
+                        return float(activity.get('patacoins_earned', 0.0))
+                else:
+                    # Assume UserActivity object with attributes
+                    if hasattr(activity, 'username') and getattr(activity, 'username') == username:
+                        return float(getattr(activity, 'patacoins_earned', 0.0))
+            
+            return 0.0
+        except Exception as e:
+            self.logger.error(f"Error getting Patacoins for user {username}: {e}")
+            return 0.0
+    
+    def _get_top_patacoin_earner(self, user_activities: List) -> str:
+        """Get the username of the top Patacoin earner"""
+        try:
+            if not user_activities:
+                return "N/A"
+            
+            max_patacoins = 0.0
+            top_earner = "N/A"
+            
+            for activity in user_activities:
+                patacoins = 0.0
+                username = ""
+                
+                # Handle both dict and UserActivity object formats
+                if isinstance(activity, dict):
+                    patacoins = float(activity.get('patacoins_earned', 0.0))
+                    username = activity.get('username', '')
+                else:
+                    # Assume UserActivity object with attributes
+                    if hasattr(activity, 'patacoins_earned'):
+                        patacoins = float(getattr(activity, 'patacoins_earned', 0.0))
+                    if hasattr(activity, 'username'):
+                        username = getattr(activity, 'username', '')
+                
+                if patacoins > max_patacoins and username:
+                    max_patacoins = patacoins
+                    top_earner = f"@{username} ({patacoins:.1f} 🪙)"
+            
+            return top_earner if top_earner != "N/A" else "N/A"
+        except Exception as e:
+            self.logger.error(f"Error getting top Patacoin earner: {e}")
+            return "N/A"

@@ -139,8 +139,8 @@ class DatabaseManager:
                     conn.execute("""
                         INSERT OR REPLACE INTO user_activities 
                         (username, date, posts_count, comments_count, votes_count, 
-                         total_rewards, avg_reward_per_post, engagement_score, activity_score, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         total_rewards, avg_reward_per_post, engagement_score, activity_score, patacoins_earned, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         activity.username,
                         date,
@@ -151,6 +151,7 @@ class DatabaseManager:
                         0.0,  # avg_reward_per_post - placeholder  
                         activity.engagement_score,
                         activity.engagement_score,  # using engagement_score as activity_score
+                        getattr(activity, 'patacoins_earned', 0.0),  # Safe access to patacoins_earned
                         datetime.now().isoformat()
                     ))
                 conn.commit()

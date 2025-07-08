@@ -48,6 +48,7 @@ class UserActivity:
     total_rewards: float = 0.0
     avg_reward_per_post: float = 0.0
     engagement_score: float = 0.0
+    patacoins_earned: float = 0.0
     activity_score: float = 0.0
     created_at: Optional[datetime] = None
     

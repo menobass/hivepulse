@@ -372,6 +372,72 @@ class AddAnalyticsMigration(Migration):
             connection.rollback()
             return False
 
+class AddPatacoinsMigration(Migration):
+    """Add patacoins tracking to user activities"""
+    
+    def __init__(self):
+        super().__init__("004", "Add Patacoins tracking system")
+    
+    def up(self, connection: sqlite3.Connection) -> bool:
+        """Add patacoins_earned column to user_activities"""
+        try:
+            cursor = connection.cursor()
+            
+            # Check if column already exists
+            cursor.execute("PRAGMA table_info(user_activities)")
+            columns = [column[1] for column in cursor.fetchall()]
+            
+            if 'patacoins_earned' not in columns:
+                # Add patacoins_earned column
+                cursor.execute("""
+                    ALTER TABLE user_activities 
+                    ADD COLUMN patacoins_earned REAL DEFAULT 0.0
+                """)
+                
+                logger.info("Added patacoins_earned column to user_activities table")
+            else:
+                logger.info("patacoins_earned column already exists")
+            
+            # Create patacoins_balances table for cumulative tracking
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS patacoins_balances (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    total_balance REAL DEFAULT 0.0,
+                    total_earned REAL DEFAULT 0.0,
+                    total_redeemed REAL DEFAULT 0.0,
+                    last_updated TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            
+            connection.commit()
+            logger.info("Patacoins migration completed successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error in patacoins migration: {e}")
+            connection.rollback()
+            return False
+    
+    def down(self, connection: sqlite3.Connection) -> bool:
+        """Remove patacoins tracking"""
+        try:
+            cursor = connection.cursor()
+            
+            # Note: SQLite doesn't support DROP COLUMN, so we'll leave the column
+            # but we can drop the patacoins_balances table
+            cursor.execute("DROP TABLE IF EXISTS patacoins_balances")
+            
+            connection.commit()
+            logger.info("Patacoins migration rolled back successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error rolling back patacoins migration: {e}")
+            connection.rollback()
+            return False
+
 class MigrationManager:
     """Manages database migrations"""
     
@@ -380,7 +446,8 @@ class MigrationManager:
         self.migrations = [
             InitialMigration(),
             AddUserTagsMigration(),
-            AddAnalyticsMigration()
+            AddAnalyticsMigration(),
+            AddPatacoinsMigration()
         ]
     
     def get_connection(self) -> sqlite3.Connection:

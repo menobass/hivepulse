@@ -22,6 +22,7 @@ class UserActivity:
     upvotes_given: int = 0
     upvotes_received: int = 0
     engagement_score: float = 0.0
+    patacoins_earned: float = 0.0
 
 
 @dataclass
@@ -39,13 +40,18 @@ class CommunityStats:
 class AnalyticsCollector:
     """Collects and processes analytics data from Hive blockchain with automatic member management"""
     
-    def __init__(self, hive_api: HiveAPIClient, db_manager: DatabaseManager):
+    def __init__(self, hive_api: HiveAPIClient, db_manager: DatabaseManager, config: Optional[Dict] = None):
         self.hive_api = hive_api
         self.db_manager = db_manager
+        self.config = config or {}
         self.logger = logging.getLogger(__name__)
         
         # Initialize community member manager
         self.member_manager = CommunityMemberManager(hive_api, db_manager)
+        
+        # Load Patacoin configuration
+        self.patacoin_config = self.config.get('patacoin_system', {})
+        self.patacoin_enabled = self.patacoin_config.get('enabled', False)
         
     def collect_daily_data_with_member_sync(self, date: Optional[str] = None) -> Dict:
         """Complete data collection process with automatic member sync"""
@@ -159,18 +165,22 @@ class AnalyticsCollector:
             total_activity = posts_count + comments_count + upvotes_given
             engagement_score = min(total_activity * 0.1, 10.0)  # Cap at 10.0
             
+            # Calculate Patacoins earned
+            patacoins_earned = self._calculate_patacoins(posts_count, comments_count, upvotes_given, upvotes_received)
+            
             return UserActivity(
                 username=username,
                 posts_count=posts_count,
                 comments_count=comments_count,
                 upvotes_given=upvotes_given,
                 upvotes_received=upvotes_received,  # TODO: Need separate API call for this
-                engagement_score=engagement_score
+                engagement_score=engagement_score,
+                patacoins_earned=patacoins_earned
             )
             
         except Exception as e:
             self.logger.error(f"Error getting blockchain activity for {username}: {str(e)}")
-            return UserActivity(username=username)
+            return UserActivity(username=username, patacoins_earned=0.0)
     
     def calculate_community_stats_from_members(self, user_activities: List[UserActivity], date: str) -> Dict:
         """Calculate community statistics based on member activities"""
@@ -248,6 +258,32 @@ class AnalyticsCollector:
             self.logger.error(f"Error calculating health index: {str(e)}")
             return 0.0
     
+    def _calculate_patacoins(self, posts: int, comments: int, upvotes_given: int, upvotes_received: int) -> float:
+        """Calculate Patacoins earned based on activity"""
+        if not self.patacoin_enabled:
+            return 0.0
+        
+        try:
+            # Get Patacoin rewards from config
+            post_reward = self.patacoin_config.get('post_reward', 2.0)
+            comment_reward = self.patacoin_config.get('comment_reward', 0.5)
+            vote_reward = self.patacoin_config.get('vote_reward', 0.02)
+            vote_daily_cap = self.patacoin_config.get('vote_daily_cap', 0.5)
+            received_vote_reward = self.patacoin_config.get('received_vote_reward', 0.1)
+            
+            # Calculate individual scores
+            post_score = posts * post_reward
+            comment_score = comments * comment_reward
+            vote_score = min(upvotes_given * vote_reward, vote_daily_cap)  # Capped
+            received_score = upvotes_received * received_vote_reward
+            
+            total_patacoins = post_score + comment_score + vote_score + received_score
+            return round(total_patacoins, 2)
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating patacoins: {e}")
+            return 0.0
+
     # Legacy methods - now handled by new blockchain-wide collection system
     # These methods are kept for compatibility but should use the new system
     

@@ -36,7 +36,7 @@ class HiveEcuadorPulse:
         # Initialize components
         self.db_manager = DatabaseManager(self.config['database_file'])
         self.hive_api = HiveAPIClient(self.config)
-        self.analytics_collector = AnalyticsCollector(self.hive_api, self.db_manager)
+        self.analytics_collector = AnalyticsCollector(self.hive_api, self.db_manager, self.config)
         self.chart_generator = ChartGenerator(self.config['visual_theme'])
         self.report_generator = ReportGenerator(self.config['post_template'])
         self.user_manager = UserManager(self.db_manager)
