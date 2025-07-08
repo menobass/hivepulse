@@ -247,6 +247,8 @@ def main():
                        help='Show community membership statistics')
     parser.add_argument('--force-resync', action='store_true',
                        help='Force complete resync of all members (use carefully!)')
+    parser.add_argument('--status', action='store_true',
+                       help='Show bot status and configuration')
     
     args = parser.parse_args()
     
@@ -302,6 +304,105 @@ def main():
                     sys.exit(1)
             else:
                 print("Force resync cancelled.")
+            return
+            
+        if args.status:
+            print("🤖 Hive Ecuador Pulse Bot Status")
+            print("=" * 40)
+            
+            # Configuration status
+            print("\n📋 Configuration:")
+            print(f"   Config file: {args.config}")
+            print(f"   Database: {bot.config['database_file']}")
+            print(f"   Community: {bot.config.get('community_account', 'hive-ecuador')}")
+            print(f"   Posting account: {bot.config.get('posting_account', 'hiveecuador')}")
+            print(f"   Dry run mode: {bot.config.get('dry_run', True)}")
+            print(f"   Log level: {bot.config.get('log_level', 'INFO')}")
+            
+            # Database status
+            print("\n💾 Database Status:")
+            try:
+                users = bot.db_manager.get_tracked_users()
+                print(f"   Tracked users: {len(users)}")
+                
+                # Get recent activity count (using user_activity_history)
+                total_activities = 0
+                for user in users[:5]:  # Check first 5 users to avoid slow queries
+                    activities = bot.db_manager.get_user_activity_history(user, days=7)
+                    total_activities += len(activities)
+                print(f"   Recent activities (sample): {total_activities}")
+                
+                # Check last report
+                with bot.db_manager.get_connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT date, success FROM generated_reports ORDER BY date DESC LIMIT 1")
+                    last_report = cursor.fetchone()
+                    if last_report:
+                        print(f"   Last report: {last_report[0]} ({'✅ Success' if last_report[1] else '❌ Failed'})")
+                    else:
+                        print("   Last report: None")
+                    
+            except Exception as e:
+                print(f"   ❌ Database error: {str(e)}")
+            
+            # Hive API status
+            print("\n🔗 Hive API Status:")
+            try:
+                # Test API connection with posting account (should exist)
+                test_account = bot.config.get('posting_account', 'hiveecuador')
+                account_info = bot.hive_api.get_account_info_extended(test_account)
+                if account_info:
+                    print(f"   ✅ API connection working")
+                    print(f"   Test account: @{test_account}")
+                else:
+                    print(f"   ❌ API connection failed (account @{test_account} not found)")
+            except Exception as e:
+                print(f"   ❌ API error: {str(e)}")
+            
+            # Scheduler status
+            print("\n⏰ Scheduler Status:")
+            schedule_time = bot.config.get('schedule_time', '21:00')
+            timezone = bot.config.get('timezone', 'America/Guayaquil')
+            print(f"   Report time: {schedule_time} ({timezone})")
+            
+            # Current time
+            try:
+                import pytz
+                tz = pytz.timezone(timezone)
+                current_time = datetime.now(tz)
+                print(f"   Current time: {current_time.strftime('%H:%M:%S %Z')}")
+                print(f"   Current date: {current_time.strftime('%Y-%m-%d')}")
+            except Exception as e:
+                print(f"   Current time: {datetime.now().strftime('%H:%M:%S')} (local)")
+            
+            # Patacoin system status
+            print("\n🪙 Patacoin System:")
+            patacoin_config = bot.config.get('patacoin_system', {})
+            if patacoin_config.get('enabled', False):
+                print(f"   ✅ Enabled")
+                print(f"   Base reward: {patacoin_config.get('base_reward', 1)} PC")
+                print(f"   Post bonus: {patacoin_config.get('post_bonus', 2)} PC")
+                print(f"   Comment bonus: {patacoin_config.get('comment_bonus', 1)} PC")
+                print(f"   Vote bonus: {patacoin_config.get('vote_bonus', 0.5)} PC")
+                
+                # Get total Patacoins in circulation
+                try:
+                    with bot.db_manager.get_connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT SUM(total_balance) FROM patacoins_balances")
+                        total_patacoins = cursor.fetchone()[0] or 0
+                        print(f"   Total in circulation: {total_patacoins:.1f} PC")
+                except Exception as e:
+                    print(f"   ❌ Could not get circulation data: {str(e)}")
+            else:
+                print(f"   ❌ Disabled")
+            
+            # Environment variables check
+            print("\n🔐 Environment:")
+            posting_key_set = bool(os.getenv('HIVE_POSTING_KEY'))
+            print(f"   Posting key: {'✅ Set' if posting_key_set else '❌ Not set'}")
+            
+            print("\n✅ Status check complete!")
             return
             
         if args.add_user:
