@@ -681,3 +681,13 @@ class MigrationManager:
         except Exception as e:
             logger.error(f"Error restoring database: {e}")
             return False
+
+# Add a main block to allow running migrations directly
+if __name__ == "__main__":
+    db_path = os.environ.get("DB_PATH", "pulse_analytics.db")
+    manager = MigrationManager(db_path)
+    print(f"Running all migrations on {db_path}")
+    if manager.init_database():
+        print("✅ Database migrations applied successfully.")
+    else:
+        print("❌ Database migration failed. Check logs for details.")
