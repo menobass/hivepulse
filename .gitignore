@@ -1,9 +1,10 @@
 # Hive Ecuador Pulse - Analytics Bot
 
-# Environment variables
+# Environment variables and private files
 .env
 .env.local
 .env.production
+TODO_PRIVATE.md
 
 # Database
 *.db

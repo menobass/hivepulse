@@ -155,11 +155,17 @@ class HiveEcuadorPulse:
         self.logger.info("Posting daily report to Hive blockchain")
         
         try:
-            # Upload images first
+            # Upload images first and create URL mapping
             uploaded_images = []
             for image_path in images:
                 uploaded_url = self.hive_api.upload_image(image_path)
-                uploaded_images.append(uploaded_url)
+                if uploaded_url:
+                    uploaded_images.append(uploaded_url)
+                    self.logger.info(f"Successfully uploaded: {image_path} -> {uploaded_url}")
+                else:
+                    self.logger.warning(f"Failed to upload: {image_path}")
+                    # Use local path as fallback
+                    uploaded_images.append(image_path)
             
             # Replace local image paths with uploaded URLs in content
             final_content = self.report_generator.replace_image_urls(report_content, uploaded_images)
@@ -168,7 +174,7 @@ class HiveEcuadorPulse:
             post_result = self.hive_api.post_content(
                 title=f"🇪🇨 Hive Ecuador Pulse - Daily Report {datetime.now().strftime('%B %d, %Y')}",
                 body=final_content,
-                tags=['hive-ecuador', 'analytics', 'community', 'daily-report', 'pulse']
+                tags=['hive-ecuador', 'analytics', 'community', 'daily-report', 'pulse', 'patacoin']
             )
             
             if post_result:
@@ -425,7 +431,7 @@ def main():
             return
             
         if args.generate_report:
-            print("Generating test report...")
+            print("Generating daily report...")
             content, images = bot.create_daily_report()
             
             # Save report to file
@@ -435,7 +441,18 @@ def main():
             with open(report_filename, 'w', encoding='utf-8') as f:
                 f.write(content)
             
-            print("Test report generated successfully!")
+            # Post to Hive if not in dry run mode
+            if not bot.config.get('dry_run', True):
+                print("Posting to Hive blockchain...")
+                success = bot.post_daily_report(content, images)
+                if success:
+                    print("✅ Report posted successfully to Hive!")
+                else:
+                    print("❌ Failed to post report to Hive!")
+            else:
+                print("Dry run mode - report not posted to Hive")
+            
+            print("Report generated successfully!")
             print(f"Report saved to: {report_filename}")
             if images:
                 print(f"Generated {len(images)} charts:")

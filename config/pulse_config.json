@@ -8,7 +8,7 @@
   "database_file": "pulse_analytics.db",
   "charts_directory": "charts",
   "assets_directory": "assets",
-  "dry_run": true,
+  "dry_run": false,
   "generate_test_report": false,
   "hive_node": "https://api.hive.blog",
   

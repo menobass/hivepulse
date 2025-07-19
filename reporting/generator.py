@@ -166,8 +166,6 @@ Ahora recompensamos la participación activa con **Patacoins** - ¡nuestra moned
 ## 📱 SÍGUENOS
 
 - **Comunidad:** [Hive Ecuador](https://peakd.com/c/hive-115276)
-- **Discord:** [Únete a nuestro servidor](https://discord.gg/hive-ecuador)
-- **Telegram:** [Canal oficial](https://t.me/hive_ecuador)
 
 ---
 
@@ -491,10 +489,55 @@ Ahora recompensamos la participación activa con **Patacoins** - ¡nuestra moned
             return content
     
     def replace_image_urls(self, content: str, uploaded_urls: List[str]) -> str:
-        """Replace local image paths with uploaded URLs"""
+        """Replace local image paths with uploaded URLs and improve descriptions"""
         try:
-            # This would replace local file paths with uploaded URLs
-            # For now, return content as-is
+            import re
+            from datetime import datetime
+            
+            # Get current date for descriptions
+            current_date = datetime.now().strftime('%B %d, %Y')
+            
+            # Define better, more human image descriptions
+            image_descriptions = {
+                'header': f'Hive Ecuador Pulse - {current_date}',
+                'activity_trend': f'Activity Trend - {current_date}',
+                'posts_volume': f'Posts Volume - {current_date}', 
+                'comments_engagement': f'Comments Engagement - {current_date}',
+                'upvotes_activity': f'Upvotes Activity - {current_date}'
+            }
+            
+            # Find all image references in content
+            image_pattern = r'!\[(.*?)\]\((.*?)\)'
+            matches = re.findall(image_pattern, content)
+            
+            self.logger.info(f"Found {len(matches)} image references in content")
+            self.logger.info(f"Have {len(uploaded_urls)} uploaded URLs")
+            
+            # Replace each image reference
+            for i, (old_alt_text, local_path) in enumerate(matches):
+                if i < len(uploaded_urls):
+                    # Determine image type from filename
+                    image_type = None
+                    for img_type in image_descriptions.keys():
+                        if img_type in local_path.lower():
+                            image_type = img_type
+                            break
+                    
+                    # Get better description or fallback to original
+                    new_description = image_descriptions.get(image_type, old_alt_text) if image_type else old_alt_text
+                    
+                    # Convert Imgur URL to proper format (ensure it ends with .png)
+                    imgur_url = uploaded_urls[i]
+                    if 'imgur.com' in imgur_url and not imgur_url.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                        imgur_url = imgur_url + '.png'
+                    
+                    # Replace the old markdown with new one
+                    old_markdown = f'![{old_alt_text}]({local_path})'
+                    new_markdown = f'![{new_description}]({imgur_url})'
+                    
+                    content = content.replace(old_markdown, new_markdown)
+                    self.logger.info(f"Replaced: {old_markdown} -> {new_markdown}")
+            
             return content
             
         except Exception as e:
@@ -669,16 +712,27 @@ Ahora recompensamos la participación activa con **Patacoins** - ¡nuestra moned
             if not user_activities or not username or username == 'N/A':
                 return 0.0
             
+            # Normalize username (remove @ if present)
+            search_username = username.strip('@').lower()
+            
             for activity in user_activities:
                 # Handle both dict and UserActivity object formats
                 if isinstance(activity, dict):
-                    if activity.get('username') == username:
-                        return float(activity.get('patacoins_earned', 0.0))
+                    activity_username = str(activity.get('username', '')).strip('@').lower()
+                    if activity_username == search_username:
+                        patacoins = activity.get('patacoins_earned', 0.0)
+                        self.logger.info(f"Found Patacoins for {username}: {patacoins}")
+                        return float(patacoins)
                 else:
                     # Assume UserActivity object with attributes
-                    if hasattr(activity, 'username') and getattr(activity, 'username') == username:
-                        return float(getattr(activity, 'patacoins_earned', 0.0))
+                    if hasattr(activity, 'username'):
+                        activity_username = str(getattr(activity, 'username', '')).strip('@').lower()
+                        if activity_username == search_username:
+                            patacoins = getattr(activity, 'patacoins_earned', 0.0)
+                            self.logger.info(f"Found Patacoins for {username}: {patacoins}")
+                            return float(patacoins)
             
+            self.logger.warning(f"No Patacoins found for user {username} in {len(user_activities)} activities")
             return 0.0
         except Exception as e:
             self.logger.error(f"Error getting Patacoins for user {username}: {e}")

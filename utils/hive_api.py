@@ -16,12 +16,12 @@ try:
     from lighthive.client import Client  # type: ignore
     from lighthive.exceptions import RPCNodeException  # type: ignore
     LIGHTHIVE_AVAILABLE = True
-    print("✅ lighthive imported successfully")
+    print("lighthive imported successfully")
 except ImportError:
     Client = None  # type: ignore
     RPCNodeException = Exception  # type: ignore
     LIGHTHIVE_AVAILABLE = False
-    print("⚠️ lighthive not available, using requests for Hive API calls")
+    print("lighthive not available, using requests for Hive API calls")
 
 
 class HiveAPIClient:
@@ -492,22 +492,121 @@ class HiveAPIClient:
             return []
     
     def upload_image(self, image_path: str) -> Optional[str]:
-        """Upload image to Hive image service"""
+        """Upload image to Imgur (requires IMGUR_CLIENT_ID in environment)"""
         try:
-            # This would implement actual image upload
-            # For now, return a placeholder URL
-            return f"https://images.hive.blog/placeholder/{image_path}"
+            import requests
+            import os
+            import base64
+            
+            if not os.path.exists(image_path):
+                self.logger.error(f"Image file not found: {image_path}")
+                return None
+            
+            # Get Imgur client ID from environment
+            client_id = os.getenv('IMGUR_CLIENT_ID')
+            if not client_id or client_id == 'your_imgur_client_id_here':
+                self.logger.error("IMGUR_CLIENT_ID not set in environment variables")
+                self.logger.info("Please get a free client ID from: https://api.imgur.com/oauth2/addclient")
+                return None
+            
+            # Use Imgur API v3
+            api_base = "https://api.imgur.com/3"
+            
+            # Read and encode image
+            with open(image_path, 'rb') as image_file:
+                image_bytes = image_file.read()
+                image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+            
+            headers = {
+                'Authorization': f'Client-ID {client_id}',
+                'Content-Type': 'application/json'
+            }
+            
+            data = {
+                'image': image_b64,
+                'type': 'base64',
+                'title': f'Hive Ecuador Pulse - {os.path.basename(image_path)}',
+                'description': 'Analytics chart from Hive Ecuador Pulse Bot'
+            }
+            
+            response = requests.post(
+                f"{api_base}/image",
+                headers=headers,
+                json=data,
+                timeout=30
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('success'):
+                    url = result['data']['link']
+                    self.logger.info(f"Image uploaded to Imgur: {url}")
+                    return url
+                else:
+                    self.logger.error(f"Imgur upload failed: {result.get('data', {}).get('error', 'Unknown error')}")
+                    return None
+            else:
+                self.logger.error(f"Imgur API error: {response.status_code} - {response.text}")
+                return None
+                
         except Exception as e:
             self.logger.error(f"Error uploading image: {str(e)}")
             return None
     
     def post_content(self, title: str, body: str, tags: List[str]) -> bool:
-        """Post content to Hive blockchain"""
+        """Post content to Hive blockchain using lighthive Operation class"""
         try:
-            # This would implement actual posting
-            # For now, just log the action
-            self.logger.info(f"Would post: {title} with tags {tags}")
-            return True
+            if not self.use_lighthive or self.client is None:
+                self.logger.error("Cannot post: lighthive client not available")
+                return False
+            
+            # Get posting key from environment
+            import os
+            posting_key = os.getenv('HIVE_POSTING_KEY')
+            if not posting_key:
+                self.logger.error("Cannot post: HIVE_POSTING_KEY not set in environment")
+                return False
+            
+            # Create permlink from title
+            import re
+            from datetime import datetime
+            
+            # Clean title for permlink
+            permlink = re.sub(r'[^a-zA-Z0-9\s-]', '', title.lower())
+            permlink = re.sub(r'\s+', '-', permlink.strip())
+            permlink = f"pulse-{datetime.now().strftime('%Y-%m-%d')}-{permlink[:30]}"
+            
+            # Set up client with posting key
+            from lighthive.client import Client
+            from lighthive.datastructures import Operation
+            posting_client = Client(keys=[posting_key])
+            
+            # Create comment operation following lighthive documentation exactly
+            operation = Operation('comment', {
+                'parent_author': None,  # None for main posts (not empty string)
+                'parent_permlink': tags[0] if tags else 'hive-ecuador',  # First tag as parent_permlink
+                'author': self.account_name,
+                'permlink': permlink,
+                'title': title,
+                'body': body,
+                'json_metadata': json.dumps({  # Must be JSON string, not dict
+                    'tags': tags,
+                    'app': 'hive-ecuador-pulse/1.0.0',
+                    'format': 'markdown'
+                })
+            })
+            
+            # Broadcast operation synchronously to get transaction ID
+            result = posting_client.broadcast_sync(operation)
+            
+            if result and 'id' in result:
+                post_url = f"https://hive.blog/@{self.account_name}/{permlink}"
+                self.logger.info(f"Successfully posted to Hive: {post_url} (TX: {result['id']})")
+                return True
+            else:
+                self.logger.error(f"Failed to post to Hive blockchain - unexpected result: {result}")
+                return False
+                
         except Exception as e:
             self.logger.error(f"Error posting content: {str(e)}")
             return False
