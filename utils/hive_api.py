@@ -574,7 +574,8 @@ class HiveAPIClient:
             # Clean title for permlink
             permlink = re.sub(r'[^a-zA-Z0-9\s-]', '', title.lower())
             permlink = re.sub(r'\s+', '-', permlink.strip())
-            permlink = f"pulse-{datetime.now().strftime('%Y-%m-%d')}-{permlink[:30]}"
+            # Add timestamp to make permlinks unique and prevent editing previous posts
+            permlink = f"pulse-{datetime.now().strftime('%Y-%m-%d-%H%M%S')}-{permlink[:30]}"
             
             # Set up client with posting key
             from lighthive.client import Client

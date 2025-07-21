@@ -152,17 +152,6 @@ Ahora recompensamos la participación activa con **Patacoins** - ¡nuestra moned
 
 ---
 
-## 🤝 PARTICIPA
-
-¿Quieres ser parte de nuestro tracking? ¡Déjanos un comentario!
-
-**Comandos disponibles:**
-- `!pulse add-user @tu_usuario` - Únete al seguimiento
-- `!pulse add-business @tu_negocio "Nombre del Negocio" categoria` - Registra tu negocio
-- `!pulse stats` - Ver estadísticas personales
-
----
-
 ## 📱 SÍGUENOS
 
 - **Comunidad:** [Hive Ecuador](https://peakd.com/c/hive-115276)
@@ -310,10 +299,14 @@ Ahora recompensamos la participación activa con **Patacoins** - ¡nuestra moned
             top_commenter_count = top_performers.get('top_commenter', {}).get('count', 0)
             top_supporter_count = top_performers.get('top_supporter', {}).get('count', 0)
             
-            # Get Patacoins data for top performers
-            top_poster_patacoins = self._get_patacoins_for_user(user_activities, top_performers.get('top_poster', {}).get('username', ''))
-            top_commenter_patacoins = self._get_patacoins_for_user(user_activities, top_performers.get('top_commenter', {}).get('username', ''))
-            top_supporter_patacoins = self._get_patacoins_for_user(user_activities, top_performers.get('top_supporter', {}).get('username', ''))
+            # Get Patacoins data for top performers - handle users array format
+            top_poster_user = top_performers.get('top_poster', {}).get('users', [''])[0] if top_performers.get('top_poster', {}).get('users') else ''
+            top_commenter_user = top_performers.get('top_commenter', {}).get('users', [''])[0] if top_performers.get('top_commenter', {}).get('users') else ''
+            top_supporter_user = top_performers.get('top_supporter', {}).get('users', [''])[0] if top_performers.get('top_supporter', {}).get('users') else ''
+            
+            top_poster_patacoins = self._get_patacoins_for_user(user_activities, top_poster_user)
+            top_commenter_patacoins = self._get_patacoins_for_user(user_activities, top_commenter_user)
+            top_supporter_patacoins = self._get_patacoins_for_user(user_activities, top_supporter_user)
             
             # Get emojis
             poster_emoji = get_growth_emoji(top_poster_count * 5)
