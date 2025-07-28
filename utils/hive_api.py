@@ -611,3 +611,61 @@ class HiveAPIClient:
         except Exception as e:
             self.logger.error(f"Error posting content: {str(e)}")
             return False
+    
+    def get_hbd_transactions(self, username: str, date: str) -> List[Dict]:
+        """Get HBD transactions for a user on a specific date"""
+        self.logger.info(f"Getting HBD transactions for {username} on {date}")
+        
+        try:
+            if not self.client:
+                self.logger.warning("No Hive client available for transaction tracking")
+                return []
+            
+            # Get account history (last 1000 operations)
+            history = self.client.get_account_history(username, -1, 1000)
+            
+            if not history:
+                self.logger.warning(f"No account history found for {username}")
+                return []
+            
+            hbd_transactions = []
+            target_date = date  # Format: 2025-07-27
+            
+            for entry in history:
+                if not isinstance(entry, list) or len(entry) < 2:
+                    continue
+                    
+                operation = entry[1]
+                if not isinstance(operation, dict) or 'op' not in operation:
+                    continue
+                
+                # Check if it's a transfer operation
+                if operation['op'][0] == 'transfer':
+                    transfer_data = operation['op'][1]
+                    timestamp = operation.get('timestamp', '')
+                    
+                    # Check if transfer is TO this business (incoming)
+                    if transfer_data.get('to') == username:
+                        # Check if it's HBD and on target date
+                        amount_str = transfer_data.get('amount', '')
+                        op_date = timestamp[:10]  # Extract YYYY-MM-DD
+                        
+                        if 'HBD' in amount_str and op_date == target_date:
+                            amount = float(amount_str.replace(' HBD', ''))
+                            
+                            transaction = {
+                                'from_user': transfer_data.get('from', ''),
+                                'to_user': username,
+                                'amount': amount,
+                                'memo': transfer_data.get('memo', ''),
+                                'timestamp': timestamp,
+                                'date': op_date
+                            }
+                            hbd_transactions.append(transaction)
+            
+            self.logger.info(f"Found {len(hbd_transactions)} HBD transactions for {username} on {date}")
+            return hbd_transactions
+            
+        except Exception as e:
+            self.logger.error(f"Error getting HBD transactions for {username}: {str(e)}")
+            return []

@@ -81,6 +81,9 @@ class AnalyticsCollector:
             # Step 6: Identify top performers
             top_performers = self.identify_top_performers(user_activities)
             
+            # Step 7: Track business activity and HBD transactions
+            business_data = self.track_business_activity(date)
+            
             return {
                 'date': date,
                 'sync_results': sync_results,
@@ -88,6 +91,7 @@ class AnalyticsCollector:
                 'community_stats': community_stats,
                 'user_activities': user_activities,
                 'top_performers': top_performers,
+                'business': business_data,
                 'total_tracked_members': len(user_activities)
             }
             
@@ -325,21 +329,30 @@ class AnalyticsCollector:
             business_volumes = {}
             
             for business in businesses:
-                # TODO: Implement HBD transaction tracking
-                # For now, use placeholder data
-                transactions = []  # self.hive_api.get_hbd_transactions(business.get('username', ''), date)
+                username = business.get('username', '')
+                if not username:
+                    continue
+                    
+                # Get actual HBD transactions for this business
+                self.logger.info(f"Getting HBD transactions for business: {username}")
+                transactions = self.hive_api.get_hbd_transactions(username, date)
                 
                 if transactions is None:
                     transactions = []
                 
+                # Calculate total volume for this business (sum of incoming HBD)
                 business_volume = sum(float(tx.get('amount', 0)) for tx in transactions if tx.get('amount'))
-                business_volumes[business.get('username', '')] = business_volume
+                business_volumes[username] = business_volume
                 total_volume += business_volume
                 
-                business_data['transactions'].extend(transactions)
+                # Store transactions with business info
+                for tx in transactions:
+                    tx['business_name'] = business.get('display_name', username)
+                    business_data['transactions'].append(tx)
                 
                 if business_volume > 0:
                     business_data['active_businesses'] += 1
+                    self.logger.info(f"Business {username} had {len(transactions)} transactions totaling {business_volume} HBD")
             
             business_data['total_hbd_volume'] = total_volume
             
